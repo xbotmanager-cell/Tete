@@ -1,0 +1,32 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/fx",
+      "destination": "/api/fx"
+    },
+    {
+      "source": "/api/fx/:path*",
+      "destination": "/api/fx?__fx_path=:path*"
+    },
+    {
+      "source": "/api/local",
+      "destination": "/api/local"
+    },
+    {
+      "source": "/api/local/:path*",
+      "destination": "/api/local?__local_path=:path*"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

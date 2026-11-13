@@ -1,0 +1,8 @@
+{
+  "name": "Remix Lupin Movies",
+  "description": "A premium, high-performance streaming platform powered by the extensive FRAMEX API for movies, shows, anime, and live content.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
