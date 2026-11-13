@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Compass,
   Info,
+  LayoutTemplate,
   Play,
   Radio,
   Sparkles,
-  BookOpen,
 } from 'lucide-react';
-import { apiFetch } from '../lib/api';
-import { extractArray, FALLBACK_ART, normalizeMediaItem } from '../lib/mediaUtils';
+import { FALLBACK_ART } from '../lib/mediaUtils';
 import { useAuth } from '../context/AuthContext';
+import { useCatalog } from '../context/CatalogContext';
 import type { AppRoute } from '../components/Navbar';
 import type { ActivePlaybackTarget, MediaItem } from '../types/framex';
 import { MediaCarousel } from '../components/MediaCarousel';
@@ -25,75 +26,23 @@ interface HomePageProps {
 }
 
 export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePageProps) {
-  const { watchProgress } = useAuth();
+  const { watchProgress, library, setAppearanceModalOpen } = useAuth();
+  const {
+    trending,
+    popularMovies,
+    latestMovies,
+    upcomingMovies,
+    topRated,
+    popularSeries,
+    recommended,
+    genreCollections,
+    loading,
+    genresLoading,
+    error,
+    refresh,
+  } = useCatalog();
 
-  const [trending, setTrending] = useState<MediaItem[]>([]);
-  const [popularMovies, setPopularMovies] = useState<MediaItem[]>([]);
-  const [popularSeries, setPopularSeries] = useState<MediaItem[]>([]);
-  const [latestMovies, setLatestMovies] = useState<MediaItem[]>([]);
-  const [upcoming, setUpcoming] = useState<MediaItem[]>([]);
-  const [actionGenre, setActionGenre] = useState<MediaItem[]>([]);
-  const [genres, setGenres] = useState<Array<{ name: string; slug: string }>>([]);
-  const [activeGenre, setActiveGenre] = useState<string>('action');
   const [heroIdx, setHeroIdx] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
-
-  const loadHome = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [tr, pm, ps, lm, up, gn] = await Promise.all([
-        apiFetch('/api/fx/movies/trending?provider=v1&page=1'),
-        apiFetch('/api/fx/movies/popular?provider=v1&page=1'),
-        apiFetch('/api/fx/series/popular?provider=v1&page=1'),
-        apiFetch('/api/fx/movies/latest?provider=v1&page=1'),
-        apiFetch('/api/fx/movies/upcoming?provider=v1'),
-        apiFetch('/api/fx/genres?provider=v1').catch(() => null),
-      ]);
-
-      setTrending(extractArray(tr).map((r) => normalizeMediaItem(r, 'moviebox')));
-      setPopularMovies(extractArray(pm).map((r) => normalizeMediaItem(r, 'moviebox')));
-      setPopularSeries(extractArray(ps).map((r) => normalizeMediaItem(r, 'moviebox')));
-      setLatestMovies(extractArray(lm).map((r) => normalizeMediaItem(r, 'moviebox')));
-      setUpcoming(extractArray(up).map((r) => normalizeMediaItem(r, 'moviebox')));
-
-      const gList = extractArray(gn)
-        .map((g) => ({
-          name: String(g.name || g.title || g.slug || ''),
-          slug: String(g.slug || g.id || g.name || '').toLowerCase(),
-        }))
-        .filter((g) => g.name && g.slug);
-      setGenres(gList.slice(0, 10));
-      if (gList[0]?.slug) {
-        setActiveGenre(gList[0].slug);
-      }
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadHome();
-  }, [loadHome]);
-
-  useEffect(() => {
-    if (!activeGenre) return;
-    let active = true;
-    apiFetch(`/api/fx/genres/${encodeURIComponent(activeGenre)}?provider=v1&page=1`)
-      .then((res) => {
-        if (!active) return;
-        setActionGenre(extractArray(res).map((r) => normalizeMediaItem(r, 'moviebox')));
-      })
-      .catch(() => {
-        if (active) setActionGenre([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [activeGenre]);
 
   const featuredPool = trending.slice(0, 5);
   const heroItem = featuredPool[heroIdx] || null;
@@ -106,14 +55,59 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
     return () => window.clearInterval(t);
   }, [featuredPool.length]);
 
-  const resumeItems = watchProgress.filter(
-    (w) => w.position_seconds > 5 && (!w.duration_seconds || w.position_seconds < w.duration_seconds - 15)
+  const resumeItems = useMemo(
+    () =>
+      watchProgress.filter(
+        (w) =>
+          w.position_seconds > 5 &&
+          (!w.duration_seconds || w.position_seconds < w.duration_seconds - 15)
+      ),
+    [watchProgress]
   );
 
+  const recentlyWatchedItems = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ item: MediaItem; pct: number; subtitle: string }> = [];
+    for (const w of watchProgress) {
+      if (seen.has(w.content_id)) continue;
+      seen.add(w.content_id);
+      const pct =
+        w.duration_seconds > 0
+          ? Math.min(100, Math.round((w.position_seconds / w.duration_seconds) * 100))
+          : 15;
+      list.push({
+        item: {
+          id: w.content_id,
+          subjectId: w.content_id,
+          slug: w.slug,
+          title: w.title,
+          poster: w.poster,
+          type: w.media_type === 'series' ? 'series' : 'movie',
+          source: w.provider,
+          genres: [],
+        },
+        pct,
+        subtitle: w.season > 0 ? `S${w.season} E${w.episode} · ${pct}%` : `${pct}% watched`,
+      });
+      if (list.length >= 10) break;
+    }
+    return list;
+  }, [watchProgress]);
+
+  const recommendedForYou = useMemo(() => {
+    if (library.length === 0 && watchProgress.length === 0) return recommended;
+    const watchedIds = new Set([
+      ...watchProgress.map((w) => w.content_id),
+      ...library.map((l) => l.item_id),
+    ]);
+    const filtered = recommended.filter((item) => !watchedIds.has(item.id));
+    return filtered.length >= 6 ? filtered : recommended;
+  }, [recommended, library, watchProgress]);
+
   return (
-    <div className="space-y-10 sm:space-y-12">
-      {/* Cinematic Featured Hero */}
-      <section className="relative rounded-3xl overflow-hidden glass-surface-elevated min-h-[380px] sm:min-h-[460px] lg:min-h-[520px] flex items-end">
+    <div className="space-y-9 sm:space-y-11">
+      {/* Classic Edition Featured Hero */}
+      <section className="relative rounded-3xl overflow-hidden glass-surface-elevated min-h-[360px] sm:min-h-[430px] lg:min-h-[480px] flex items-end">
         <img
           src={heroItem?.backdrop || heroItem?.poster || FALLBACK_ART.cinemaHero}
           alt={heroItem?.title || 'LUPIN MOVIES Featured Cinema'}
@@ -123,8 +117,8 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
         <div className="absolute inset-0 bg-gradient-to-t from-[#080305] via-[#080305]/65 to-black/25" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#080305]/95 via-[#18070d]/55 to-transparent" />
 
-        <div className="relative z-10 w-full p-6 sm:p-10 lg:p-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="max-w-2xl space-y-3.5">
+        <div className="relative z-10 w-full p-6 sm:p-10 lg:p-11 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="max-w-2xl space-y-3">
             <p className="text-xs sm:text-sm font-medium text-amber-200/90 tracking-wide">
               {heroItem
                 ? [
@@ -145,7 +139,7 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
                 'Stream trending films, multi-season series, subbed and dubbed anime, live international television, football analytics, and serialized fiction from one obsidian-burgundy interface.'}
             </p>
 
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-2.5 pt-2">
               {heroItem ? (
                 <>
                   <button
@@ -175,6 +169,15 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
                   <span>Explore Catalog</span>
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() => setAppearanceModalOpen(true)}
+                className="glass-btn h-11 px-4 rounded-xl text-sm font-medium text-rose-100 hover:text-white inline-flex items-center gap-2 cursor-pointer whitespace-nowrap"
+              >
+                <LayoutTemplate className="w-4 h-4" />
+                <span>Switch Layout</span>
+              </button>
             </div>
           </div>
 
@@ -217,16 +220,16 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
         </div>
       </section>
 
-      {Boolean(error) && <DomainNoticeBanner error={error} onRetry={() => void loadHome()} />}
+      {Boolean(error) && <DomainNoticeBanner error={error} onRetry={() => void refresh()} />}
 
       {/* Continue Watching */}
       {resumeItems.length > 0 && (
-        <section className="space-y-3.5">
-          <h2 className="font-display text-xl sm:text-2xl font-semibold text-white">
+        <section className="space-y-3">
+          <h2 className="font-display text-lg sm:text-xl font-semibold text-white">
             Continue Watching
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
-            {resumeItems.slice(0, 6).map((w) => {
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-3">
+            {resumeItems.slice(0, 7).map((w) => {
               const pct =
                 w.duration_seconds > 0
                   ? Math.round((w.position_seconds / w.duration_seconds) * 100)
@@ -251,7 +254,12 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
                   onSelect={(item) => onSelectTitle(item)}
                   onQuickPlay={() =>
                     onPlayTarget({
-                      mode: w.provider === 'animex' ? 'hls' : w.provider === 'gotaku' ? 'embed' : 'direct',
+                      mode:
+                        w.provider === 'animex'
+                          ? 'hls'
+                          : w.provider === 'gotaku'
+                            ? 'embed'
+                            : 'direct',
                       title: w.title,
                       subtitle: w.season > 0 ? `Season ${w.season} · Episode ${w.episode}` : undefined,
                       poster: w.poster,
@@ -270,14 +278,14 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
         </section>
       )}
 
-      {/* Primary Discovery Carousels */}
+      {/* Organized Primary Collections */}
       <MediaCarousel
-        title="Trending Now"
-        subtitle="Most watched titles across LUPIN MOVIES"
+        title="Trending Movies"
+        subtitle="Most watched titles right now"
         items={trending}
         loading={loading}
         onSelect={onSelectTitle}
-        actionLabel="See all"
+        actionLabel="Explore all"
         onAction={() => onNavigate('discover')}
       />
 
@@ -289,18 +297,76 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
       />
 
       <MediaCarousel
+        title="Latest Releases"
+        items={latestMovies}
+        loading={loading}
+        onSelect={onSelectTitle}
+      />
+
+      {upcomingMovies.length > 0 && (
+        <MediaCarousel
+          title="Upcoming Movies"
+          items={upcomingMovies}
+          loading={loading}
+          onSelect={onSelectTitle}
+        />
+      )}
+
+      {topRated.length > 0 && (
+        <MediaCarousel
+          title="Top Rated"
+          items={topRated}
+          loading={loading}
+          onSelect={onSelectTitle}
+        />
+      )}
+
+      <MediaCarousel
         title="Popular TV Series"
         items={popularSeries}
         loading={loading}
         onSelect={onSelectTitle}
       />
 
+      {recommendedForYou.length > 0 && (
+        <MediaCarousel
+          title="Recommended For You"
+          subtitle="Curated picks tailored for your screening queue"
+          items={recommendedForYou}
+          loading={loading}
+          onSelect={onSelectTitle}
+        />
+      )}
+
+      {recentlyWatchedItems.length > 0 && (
+        <section className="space-y-2.5">
+          <h2 className="font-display text-lg sm:text-xl font-semibold text-white">
+            Recently Watched
+          </h2>
+          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1.5">
+            {recentlyWatchedItems.map(({ item, pct, subtitle }) => (
+              <div
+                key={`recent-${item.id}-${subtitle}`}
+                className="w-[126px] sm:w-[144px] lg:w-[156px] xl:w-[164px] shrink-0"
+              >
+                <MediaCard
+                  item={item}
+                  progressPercent={pct}
+                  subtitleOverride={subtitle}
+                  onSelect={onSelectTitle}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Quick Portals: Anime, Live & Sports, Novels */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <button
           type="button"
           onClick={() => onNavigate('anime')}
-          className="group relative h-44 rounded-2xl overflow-hidden glass-surface text-left p-6 flex flex-col justify-end cursor-pointer"
+          className="group relative h-40 rounded-2xl overflow-hidden glass-surface text-left p-5 flex flex-col justify-end cursor-pointer"
         >
           <img
             src={FALLBACK_ART.animeShowcase}
@@ -313,7 +379,7 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
               <Sparkles className="w-3.5 h-3.5" />
               Gotaku & AnimeX
             </span>
-            <h3 className="font-display text-xl font-bold text-white">Anime Center</h3>
+            <h3 className="font-display text-lg font-bold text-white">Anime Center</h3>
             <p className="text-xs text-rose-100/70">Sub, Dub & Multi-Server Playback</p>
           </div>
         </button>
@@ -321,7 +387,7 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
         <button
           type="button"
           onClick={() => onNavigate('live')}
-          className="group relative h-44 rounded-2xl overflow-hidden glass-surface text-left p-6 flex flex-col justify-end cursor-pointer"
+          className="group relative h-40 rounded-2xl overflow-hidden glass-surface text-left p-5 flex flex-col justify-end cursor-pointer"
         >
           <img
             src={FALLBACK_ART.sportsArena}
@@ -334,7 +400,7 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
               <Radio className="w-3.5 h-3.5" />
               TVGarden · GoalNivo · Wrestling
             </span>
-            <h3 className="font-display text-xl font-bold text-white">Live TV & Sports</h3>
+            <h3 className="font-display text-lg font-bold text-white">Live TV & Sports</h3>
             <p className="text-xs text-rose-100/70">Global Channels, Live Matches & Replays</p>
           </div>
         </button>
@@ -342,7 +408,7 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
         <button
           type="button"
           onClick={() => onNavigate('novels')}
-          className="group relative h-44 rounded-2xl overflow-hidden glass-surface text-left p-6 flex flex-col justify-end cursor-pointer"
+          className="group relative h-40 rounded-2xl overflow-hidden glass-surface text-left p-5 flex flex-col justify-end cursor-pointer"
         >
           <img
             src={FALLBACK_ART.novelCover}
@@ -355,60 +421,29 @@ export function HomePage({ onSelectTitle, onPlayTarget, onNavigate }: HomePagePr
               <BookOpen className="w-3.5 h-3.5" />
               NovelHub & NovelStore
             </span>
-            <h3 className="font-display text-xl font-bold text-white">Novel Library</h3>
+            <h3 className="font-display text-lg font-bold text-white">Novel Library</h3>
             <p className="text-xs text-rose-100/70">Chapters, Rankings & Reading Sync</p>
           </div>
         </button>
       </section>
 
-      <MediaCarousel
-        title="Latest Releases"
-        items={latestMovies}
-        loading={loading}
-        onSelect={onSelectTitle}
-      />
-
-      {upcoming.length > 0 && (
+      {/* Genre Collections: Action, Comedy, Horror, Romance, Sci-Fi, Adventure, Animation */}
+      {genresLoading && genreCollections.length === 0 ? (
         <MediaCarousel
-          title="Upcoming Releases"
-          items={upcoming}
-          loading={loading}
+          title="Genre Collections"
+          items={[]}
+          loading={true}
           onSelect={onSelectTitle}
         />
-      )}
-
-      {/* Genre Collection Explorer */}
-      {genres.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h2 className="font-display text-xl sm:text-2xl font-semibold text-white">
-              Browse by Genre
-            </h2>
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
-              {genres.map((g) => (
-                <button
-                  key={g.slug}
-                  type="button"
-                  onClick={() => setActiveGenre(g.slug)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap cursor-pointer transition-colors ${
-                    activeGenre === g.slug
-                      ? 'glass-btn-primary text-white'
-                      : 'glass-btn text-rose-100/75'
-                  }`}
-                >
-                  {g.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
+      ) : (
+        genreCollections.map((genre) => (
           <MediaCarousel
-            title=""
-            items={actionGenre}
-            loading={false}
+            key={genre.id}
+            title={genre.label}
+            items={genre.items}
             onSelect={onSelectTitle}
           />
-        </section>
+        ))
       )}
     </div>
   );

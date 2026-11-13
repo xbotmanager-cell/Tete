@@ -6,26 +6,40 @@ import type { MediaItem, SearchV2Metadata } from '../types/framex';
 import { MediaCard } from '../components/MediaCard';
 import { DomainNoticeBanner } from '../components/DomainNoticeBanner';
 
+export type CatalogTab =
+  | 'trending'
+  | 'popular_movies'
+  | 'popular_series'
+  | 'latest_movies'
+  | 'latest_series'
+  | 'upcoming';
+
 interface DiscoverPageProps {
   onSelectTitle: (item: MediaItem) => void;
+  initialTab?: CatalogTab;
+  initialQuery?: string;
+  focusType?: 'all' | 'movies' | 'series';
 }
 
-type CatalogTab = 'trending' | 'popular_movies' | 'popular_series' | 'latest_movies' | 'latest_series' | 'upcoming';
-
-const CATALOG_TABS: Array<{ id: CatalogTab; label: string }> = [
-  { id: 'trending', label: 'Trending' },
-  { id: 'popular_movies', label: 'Popular Movies' },
-  { id: 'popular_series', label: 'Popular Series' },
-  { id: 'latest_movies', label: 'Latest Movies' },
-  { id: 'latest_series', label: 'Latest Series' },
-  { id: 'upcoming', label: 'Upcoming' },
+const CATALOG_TABS: Array<{ id: CatalogTab; label: string; group: 'movies' | 'series' | 'all' }> = [
+  { id: 'trending', label: 'Trending', group: 'movies' },
+  { id: 'popular_movies', label: 'Popular Movies', group: 'movies' },
+  { id: 'popular_series', label: 'Popular Series', group: 'series' },
+  { id: 'latest_movies', label: 'Latest Movies', group: 'movies' },
+  { id: 'latest_series', label: 'Latest Series', group: 'series' },
+  { id: 'upcoming', label: 'Upcoming', group: 'movies' },
 ];
 
-export function DiscoverPage({ onSelectTitle }: DiscoverPageProps) {
+export function DiscoverPage({
+  onSelectTitle,
+  initialTab = 'trending',
+  initialQuery = '',
+  focusType = 'all',
+}: DiscoverPageProps) {
   const [provider, setProvider] = useState<'v1' | 'v2'>('v1');
-  const [activeTab, setActiveTab] = useState<CatalogTab>('trending');
-  const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<CatalogTab>(initialTab);
+  const [query, setQuery] = useState(initialQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery.trim());
   const [searchMeta, setSearchMeta] = useState<SearchV2Metadata | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -35,6 +49,21 @@ export function DiscoverPage({ onSelectTitle }: DiscoverPageProps) {
   const [items, setItems] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+      setSelectedGenre('');
+      setSelectedCategory('');
+      setPage(1);
+    }
+  }, [initialTab]);
+
+  useEffect(() => {
+    setQuery(initialQuery);
+    setDebouncedQuery(initialQuery.trim());
+    setPage(1);
+  }, [initialQuery]);
 
   // Debounce search input
   useEffect(() => {
@@ -147,6 +176,18 @@ export function DiscoverPage({ onSelectTitle }: DiscoverPageProps) {
     void fetchCatalog();
   }, [fetchCatalog]);
 
+  const visibleTabs =
+    focusType === 'all'
+      ? CATALOG_TABS
+      : CATALOG_TABS.filter((t) => t.group === focusType);
+
+  const headingTitle =
+    focusType === 'movies'
+      ? 'Movies Catalog'
+      : focusType === 'series'
+        ? 'TV Series Catalog'
+        : 'Discover Cinema & Series';
+
   return (
     <div className="space-y-6">
       {/* Header & Search Toolbar */}
@@ -154,7 +195,7 @@ export function DiscoverPage({ onSelectTitle }: DiscoverPageProps) {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">
-              Discover Cinema & Series
+              {headingTitle}
             </h1>
             <p className="text-sm text-rose-100/65 mt-0.5">
               Provider-aware search and browse across MovieBox and Showbox catalogs.
@@ -202,7 +243,7 @@ export function DiscoverPage({ onSelectTitle }: DiscoverPageProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search movies, series, or titles (e.g. Inception, Dune, Breaking Bad)…"
-            className="w-full h-12 pl-11 pr-11 rounded-2xl bg-black/45 border border-rose-200/15 text-sm text-white placeholder:text-rose-100/40 focus:outline-none focus:border-rose-400"
+            className="w-full h-11 pl-11 pr-11 rounded-2xl bg-black/45 border border-rose-200/15 text-sm text-white placeholder:text-rose-100/40 focus:outline-none focus:border-rose-400"
           />
           {query && (
             <button
@@ -220,7 +261,7 @@ export function DiscoverPage({ onSelectTitle }: DiscoverPageProps) {
         {!debouncedQuery && (
           <div className="space-y-3">
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-              {CATALOG_TABS.map((tab) => (
+              {visibleTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
@@ -298,15 +339,15 @@ export function DiscoverPage({ onSelectTitle }: DiscoverPageProps) {
 
       {Boolean(error) && <DomainNoticeBanner error={error} onRetry={() => void fetchCatalog()} />}
 
-      {/* Grid Results */}
+      {/* Compact Portrait Grid Results */}
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="glass-surface rounded-2xl overflow-hidden animate-pulse">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
+          {Array.from({ length: 14 }).map((_, i) => (
+            <div key={i} className="glass-surface rounded-xl overflow-hidden animate-pulse">
               <div className="aspect-[2/3] bg-rose-950/40" />
-              <div className="p-3 space-y-2">
-                <div className="h-3.5 bg-rose-900/40 rounded w-4/5" />
-                <div className="h-3 bg-rose-900/30 rounded w-1/2" />
+              <div className="px-2.5 py-2 space-y-1.5">
+                <div className="h-3 bg-rose-900/40 rounded w-4/5" />
+                <div className="h-2.5 bg-rose-900/30 rounded w-1/2" />
               </div>
             </div>
           ))}
@@ -319,7 +360,7 @@ export function DiscoverPage({ onSelectTitle }: DiscoverPageProps) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
           {items.map((item) => (
             <MediaCard
               key={`${item.source}-${item.id}-${item.slug}`}
@@ -342,7 +383,7 @@ export function DiscoverPage({ onSelectTitle }: DiscoverPageProps) {
             <ChevronLeft className="w-4 h-4" />
             <span>Previous</span>
           </button>
-          <span className="font-mono text-xs text-rose-100/75 px-3">Page {page}</span>
+          <span className="font-mono text-xs text-rose-100/75 px-3 tabular-nums">Page {page}</span>
           <button
             type="button"
             disabled={loading || items.length < 10}

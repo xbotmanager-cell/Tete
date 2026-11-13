@@ -283,11 +283,18 @@ localRouter.patch('/auth/profile', async (req, res) => {
       ? String(req.body.preferred_audio_lang)
       : user.preferred_audio_lang;
 
+    const rawLayout = req.body?.preferred_layout ? String(req.body.preferred_layout) : user.preferred_layout;
+    const preferred_layout =
+      rawLayout === 'sidebar' || rawLayout === 'cinematic' || rawLayout === 'classic'
+        ? rawLayout
+        : user.preferred_layout;
+
     const updated = await updateUserProfile(user.id, {
       name,
       preferred_quality,
       preferred_subtitle_lang,
       preferred_audio_lang,
+      preferred_layout,
     });
 
     return res.json({ user: updated });

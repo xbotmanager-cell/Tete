@@ -18,6 +18,7 @@ export interface DbUser {
   preferred_quality: string;
   preferred_subtitle_lang: string;
   preferred_audio_lang: string;
+  preferred_layout: string;
   created_at: string;
 }
 
@@ -77,8 +78,12 @@ const PG_SCHEMA_SQL = `
     preferred_quality TEXT NOT NULL DEFAULT '1080',
     preferred_subtitle_lang TEXT NOT NULL DEFAULT 'en',
     preferred_audio_lang TEXT NOT NULL DEFAULT 'en',
+    preferred_layout TEXT NOT NULL DEFAULT 'classic',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+
+  ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS preferred_layout TEXT NOT NULL DEFAULT 'classic';
 
   CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
@@ -158,6 +163,7 @@ const SQLITE_SCHEMA_SQL = `
     preferred_quality TEXT NOT NULL DEFAULT '1080',
     preferred_subtitle_lang TEXT NOT NULL DEFAULT 'en',
     preferred_audio_lang TEXT NOT NULL DEFAULT 'en',
+    preferred_layout TEXT NOT NULL DEFAULT 'classic',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -246,6 +252,7 @@ function normalizeUser(row: Record<string, unknown>): DbUser {
     preferred_quality: String(row.preferred_quality ?? '1080'),
     preferred_subtitle_lang: String(row.preferred_subtitle_lang ?? 'en'),
     preferred_audio_lang: String(row.preferred_audio_lang ?? 'en'),
+    preferred_layout: String(row.preferred_layout ?? 'classic'),
     created_at: toIso(row.created_at),
   };
 }
@@ -353,6 +360,10 @@ async function getSqliteDb(): Promise<import('node:sqlite').DatabaseSync> {
     const dbPath = path.join(dataDir, 'lupin_movies.db');
     const sqlite = new DatabaseSync(dbPath);
     sqlite.exec(SQLITE_SCHEMA_SQL);
+    const cols = sqlite.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === 'preferred_layout')) {
+      sqlite.exec("ALTER TABLE users ADD COLUMN preferred_layout TEXT NOT NULL DEFAULT 'classic'");
+    }
     globalForDb.__lupinSqliteDb = sqlite;
   }
 
@@ -418,7 +429,7 @@ export async function findUserWithPasswordByEmail(
   if (usePostgres()) {
     const pool = await getPgPool();
     const res = await pool.query(
-      'SELECT id, email, name, password_hash, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, created_at FROM users WHERE email = $1 LIMIT 1',
+      'SELECT id, email, name, password_hash, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, preferred_layout, created_at FROM users WHERE email = $1 LIMIT 1',
       [email]
     );
     if (!res.rows[0]) return null;
@@ -428,7 +439,7 @@ export async function findUserWithPasswordByEmail(
   const sqlite = await getSqliteDb();
   const row = sqlite
     .prepare(
-      'SELECT id, email, name, password_hash, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, created_at FROM users WHERE email = ?'
+      'SELECT id, email, name, password_hash, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, preferred_layout, created_at FROM users WHERE email = ?'
     )
     .get(email) as Record<string, unknown> | undefined;
   if (!row) return null;
@@ -445,7 +456,7 @@ export async function createUser(input: {
     const res = await pool.query(
       `INSERT INTO users (email, name, password_hash)
        VALUES ($1, $2, $3)
-       RETURNING id, email, name, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, created_at`,
+       RETURNING id, email, name, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, preferred_layout, created_at`,
       [input.email, input.name, input.passwordHash]
     );
     return normalizeUser(res.rows[0] as Record<string, unknown>);
@@ -457,7 +468,7 @@ export async function createUser(input: {
   const userId = Number(result.lastInsertRowid);
   const row = sqlite
     .prepare(
-      'SELECT id, email, name, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, created_at FROM users WHERE id = ?'
+      'SELECT id, email, name, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, preferred_layout, created_at FROM users WHERE id = ?'
     )
     .get(userId) as Record<string, unknown>;
   return normalizeUser(row);
@@ -470,20 +481,22 @@ export async function updateUserProfile(
     preferred_quality: string;
     preferred_subtitle_lang: string;
     preferred_audio_lang: string;
+    preferred_layout: string;
   }
 ): Promise<DbUser | null> {
   if (usePostgres()) {
     const pool = await getPgPool();
     const res = await pool.query(
       `UPDATE users
-       SET name = $1, preferred_quality = $2, preferred_subtitle_lang = $3, preferred_audio_lang = $4
-       WHERE id = $5
-       RETURNING id, email, name, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, created_at`,
+       SET name = $1, preferred_quality = $2, preferred_subtitle_lang = $3, preferred_audio_lang = $4, preferred_layout = $5
+       WHERE id = $6
+       RETURNING id, email, name, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, preferred_layout, created_at`,
       [
         patch.name,
         patch.preferred_quality,
         patch.preferred_subtitle_lang,
         patch.preferred_audio_lang,
+        patch.preferred_layout,
         userId,
       ]
     );
@@ -492,18 +505,19 @@ export async function updateUserProfile(
   const sqlite = await getSqliteDb();
   sqlite
     .prepare(
-      'UPDATE users SET name = ?, preferred_quality = ?, preferred_subtitle_lang = ?, preferred_audio_lang = ? WHERE id = ?'
+      'UPDATE users SET name = ?, preferred_quality = ?, preferred_subtitle_lang = ?, preferred_audio_lang = ?, preferred_layout = ? WHERE id = ?'
     )
     .run(
       patch.name,
       patch.preferred_quality,
       patch.preferred_subtitle_lang,
       patch.preferred_audio_lang,
+      patch.preferred_layout,
       userId
     );
   const row = sqlite
     .prepare(
-      'SELECT id, email, name, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, created_at FROM users WHERE id = ?'
+      'SELECT id, email, name, preferred_quality, preferred_subtitle_lang, preferred_audio_lang, preferred_layout, created_at FROM users WHERE id = ?'
     )
     .get(userId) as Record<string, unknown> | undefined;
   return row ? normalizeUser(row) : null;
@@ -533,7 +547,7 @@ export async function findSessionUser(token: string): Promise<DbUser | null> {
   if (usePostgres()) {
     const pool = await getPgPool();
     const res = await pool.query(
-      `SELECT u.id, u.email, u.name, u.preferred_quality, u.preferred_subtitle_lang, u.preferred_audio_lang, u.created_at
+      `SELECT u.id, u.email, u.name, u.preferred_quality, u.preferred_subtitle_lang, u.preferred_audio_lang, u.preferred_layout, u.created_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.token = $1 AND s.expires_at > NOW()
@@ -545,7 +559,7 @@ export async function findSessionUser(token: string): Promise<DbUser | null> {
   const sqlite = await getSqliteDb();
   const row = sqlite
     .prepare(
-      `SELECT u.id, u.email, u.name, u.preferred_quality, u.preferred_subtitle_lang, u.preferred_audio_lang, u.created_at
+      `SELECT u.id, u.email, u.name, u.preferred_quality, u.preferred_subtitle_lang, u.preferred_audio_lang, u.preferred_layout, u.created_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.token = ? AND s.expires_at > datetime('now')`

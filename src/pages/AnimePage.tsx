@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Play, Search, Server } from 'lucide-react';
+import { CheckCircle2, Clock, Loader2, Play, Search, Server } from 'lucide-react';
 import { apiFetch, buildQuery } from '../lib/api';
 import { extractArray, FALLBACK_ART } from '../lib/mediaUtils';
-import type { ActivePlaybackTarget } from '../types/framex';
+import { useAuth } from '../context/AuthContext';
+import type { ActivePlaybackTarget, PlayerEpisodeOption } from '../types/framex';
 import { DomainNoticeBanner } from '../components/DomainNoticeBanner';
 
 interface AnimePageProps {
@@ -23,6 +24,8 @@ interface AnimeEpisode {
   id: string;
   number: number;
   title?: string;
+  thumbnail?: string | null;
+  duration?: string | null;
   hasSub?: boolean;
   hasDub?: boolean;
 }
@@ -36,6 +39,7 @@ interface AnimeServer {
 const FEATURED_QUERIES = ['One Piece', 'Jujutsu Kaisen', 'Solo Leveling', 'Naruto', 'Demon Slayer'];
 
 export function AnimePage({ onPlay }: AnimePageProps) {
+  const { getWatchProgress } = useAuth();
   const [engine, setEngine] = useState<'animex' | 'gotaku'>('animex');
   const [query, setQuery] = useState('One Piece');
   const [results, setResults] = useState<AnimeItem[]>([]);
@@ -61,7 +65,7 @@ export function AnimePage({ onPlay }: AnimePageProps) {
         const endpoint =
           engine === 'animex' ? '/api/fx/anime/animex/search' : '/api/fx/anime/gotaku/search';
         const res = await apiFetch(
-          `${endpoint}${buildQuery({ q: term, limit: 20 })}`
+          `${endpoint}${buildQuery({ q: term, limit: 24 })}`
         );
         const list = extractArray(res).map((raw) => ({
           contentId: String(raw.contentId || raw.id || raw.slug || ''),
@@ -86,58 +90,6 @@ export function AnimePage({ onPlay }: AnimePageProps) {
   useEffect(() => {
     void runSearch(query);
   }, [engine]); // reload when switching engine
-
-  const openAnime = async (item: AnimeItem) => {
-    setSelected(item);
-    setEpisodes([]);
-    setServers([]);
-    setSelectedServer('');
-    setLoadingEpisodes(true);
-
-    try {
-      if (engine === 'animex') {
-        const res = await apiFetch(
-          `/api/fx/anime/animex/episodes${buildQuery({ contentId: item.contentId })}`
-        );
-        const eps = extractArray(res).map((ep, idx) => ({
-          id: String(ep.episode || ep.number || idx + 1),
-          number: Number(ep.number ?? ep.episode ?? idx + 1),
-          title: ep.title ? String(ep.title) : `Episode ${ep.number ?? ep.episode ?? idx + 1}`,
-          hasSub: ep.hasSub !== false,
-          hasDub: Boolean(ep.hasDub),
-        }));
-        setEpisodes(eps);
-        if (eps[0]) {
-          void loadAnimeXServers(item.contentId, String(eps[0].number));
-        }
-      } else {
-        const [detRes, epRes] = await Promise.all([
-          apiFetch(`/api/fx/anime/gotaku/detail${buildQuery({ contentId: item.contentId })}`).catch(
-            () => null
-          ),
-          apiFetch(`/api/fx/anime/gotaku/episodes${buildQuery({ contentId: item.contentId })}`),
-        ]);
-        if (detRes && typeof detRes === 'object') {
-          const d = detRes as Record<string, unknown>;
-          if (d.description) {
-            setSelected((prev) => (prev ? { ...prev, description: String(d.description) } : prev));
-          }
-        }
-        const eps = extractArray(epRes).map((ep, idx) => ({
-          id: String(ep.episodeId || ep.id || idx + 1),
-          number: Number(ep.number ?? ep.episode ?? idx + 1),
-          title: ep.title ? String(ep.title) : `Episode ${ep.number ?? ep.episode ?? idx + 1}`,
-          hasSub: true,
-          hasDub: Boolean(ep.hasDub || ep.dub),
-        }));
-        setEpisodes(eps);
-      }
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoadingEpisodes(false);
-    }
-  };
 
   const loadAnimeXServers = async (contentId: string, epNum: string) => {
     try {
@@ -178,32 +130,137 @@ export function AnimePage({ onPlay }: AnimePageProps) {
     }
   };
 
-  const playEpisode = (ep: AnimeEpisode) => {
-    if (!selected) return;
-    if (engine === 'animex') {
+  const openAnime = async (item: AnimeItem) => {
+    setSelected(item);
+    setEpisodes([]);
+    setServers([]);
+    setSelectedServer('');
+    setLoadingEpisodes(true);
+
+    try {
+      if (engine === 'animex') {
+        const res = await apiFetch(
+          `/api/fx/anime/animex/episodes${buildQuery({ contentId: item.contentId })}`
+        );
+        const eps: AnimeEpisode[] = extractArray(res).map((ep, idx) => ({
+          id: String(ep.episode || ep.number || idx + 1),
+          number: Number(ep.number ?? ep.episode ?? idx + 1),
+          title: ep.title ? String(ep.title) : `Episode ${ep.number ?? ep.episode ?? idx + 1}`,
+          thumbnail: (ep.thumbnail || ep.image || ep.cover || null) as string | null,
+          duration: ep.duration ? String(ep.duration) : null,
+          hasSub: ep.hasSub !== false,
+          hasDub: Boolean(ep.hasDub),
+        }));
+        setEpisodes(eps);
+        if (eps[0]) {
+          void loadAnimeXServers(item.contentId, String(eps[0].number));
+        }
+      } else {
+        const [detRes, epRes] = await Promise.all([
+          apiFetch(`/api/fx/anime/gotaku/detail${buildQuery({ contentId: item.contentId })}`).catch(
+            () => null
+          ),
+          apiFetch(`/api/fx/anime/gotaku/episodes${buildQuery({ contentId: item.contentId })}`),
+        ]);
+        if (detRes && typeof detRes === 'object') {
+          const d = detRes as Record<string, unknown>;
+          if (d.description) {
+            setSelected((prev) => (prev ? { ...prev, description: String(d.description) } : prev));
+          }
+        }
+        const eps: AnimeEpisode[] = extractArray(epRes).map((ep, idx) => ({
+          id: String(ep.episodeId || ep.id || idx + 1),
+          number: Number(ep.number ?? ep.episode ?? idx + 1),
+          title: ep.title ? String(ep.title) : `Episode ${ep.number ?? ep.episode ?? idx + 1}`,
+          thumbnail: (ep.thumbnail || ep.image || ep.cover || null) as string | null,
+          duration: ep.duration ? String(ep.duration) : null,
+          hasSub: true,
+          hasDub: Boolean(ep.hasDub || ep.dub),
+        }));
+        setEpisodes(eps);
+      }
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoadingEpisodes(false);
+    }
+  };
+
+  const launchAnimeEpisode = (
+    animeItem: AnimeItem,
+    epList: AnimeEpisode[],
+    ep: AnimeEpisode,
+    activeEngine: 'animex' | 'gotaku',
+    activeSubOrDub: 'sub' | 'dub',
+    activeServerId: string
+  ) => {
+    const idx = epList.findIndex((e) => e.id === ep.id && e.number === ep.number);
+    const prevEp = idx > 0 ? epList[idx - 1] : null;
+    const nextEp = idx >= 0 && idx < epList.length - 1 ? epList[idx + 1] : null;
+
+    const playerEpisodes: PlayerEpisodeOption[] = epList.map((e) => ({
+      id: e.id,
+      episode: e.number,
+      title: e.title,
+      thumbnail: e.thumbnail,
+      duration: e.duration ?? undefined,
+    }));
+
+    if (activeEngine === 'animex') {
+      void loadAnimeXServers(animeItem.contentId, String(ep.number));
       onPlay({
         mode: 'hls',
-        title: selected.title,
-        subtitle: `Episode ${ep.number} · ${subOrDub.toUpperCase()} · AnimeX`,
-        poster: selected.poster,
+        title: animeItem.title,
+        subtitle: `Episode ${ep.number} · ${activeSubOrDub.toUpperCase()} · AnimeX`,
+        poster: animeItem.poster,
         provider: 'animex',
-        contentId: selected.contentId,
+        contentId: animeItem.contentId,
         mediaType: 'anime',
         episode: ep.number,
-        animeType: subOrDub,
-        animeProviderId: selectedServer || undefined,
+        animeType: activeSubOrDub,
+        animeProviderId: activeServerId || undefined,
+        episodes: playerEpisodes,
+        hasPrevEpisode: Boolean(prevEp),
+        onPrevEpisode: prevEp
+          ? () => launchAnimeEpisode(animeItem, epList, prevEp, activeEngine, activeSubOrDub, activeServerId)
+          : undefined,
+        hasNextEpisode: Boolean(nextEp),
+        onNextEpisode: nextEp
+          ? () => launchAnimeEpisode(animeItem, epList, nextEp, activeEngine, activeSubOrDub, activeServerId)
+          : undefined,
+        onSelectEpisode: (chosen) => {
+          const found = epList.find((x) => x.number === chosen.episode) || epList[0];
+          if (found) {
+            launchAnimeEpisode(animeItem, epList, found, activeEngine, activeSubOrDub, activeServerId);
+          }
+        },
       });
     } else {
       onPlay({
         mode: 'embed',
-        title: selected.title,
+        title: animeItem.title,
         subtitle: `Episode ${ep.number} · Gotaku`,
-        poster: selected.poster,
+        poster: animeItem.poster,
         provider: 'gotaku',
         contentId: ep.id,
         mediaType: 'anime',
         episode: ep.number,
         animeType: 'hard_sub',
+        episodes: playerEpisodes,
+        hasPrevEpisode: Boolean(prevEp),
+        onPrevEpisode: prevEp
+          ? () => launchAnimeEpisode(animeItem, epList, prevEp, activeEngine, activeSubOrDub, activeServerId)
+          : undefined,
+        hasNextEpisode: Boolean(nextEp),
+        onNextEpisode: nextEp
+          ? () => launchAnimeEpisode(animeItem, epList, nextEp, activeEngine, activeSubOrDub, activeServerId)
+          : undefined,
+        onSelectEpisode: (chosen) => {
+          const found = epList.find((x) => x.number === chosen.episode) || epList[0];
+          if (found) {
+            launchAnimeEpisode(animeItem, epList, found, activeEngine, activeSubOrDub, activeServerId);
+          }
+        },
       });
     }
   };
@@ -301,7 +358,7 @@ export function AnimePage({ onPlay }: AnimePageProps) {
 
       {Boolean(error) && <DomainNoticeBanner error={error} onRetry={() => void runSearch(query)} />}
 
-      {/* Selected Anime Episode Panel */}
+      {/* Selected Anime Complete Episode Panel */}
       {selected && (
         <section className="glass-surface-elevated rounded-3xl p-5 sm:p-6 space-y-5">
           <div className="flex flex-col sm:flex-row gap-5 items-start justify-between">
@@ -313,9 +370,10 @@ export function AnimePage({ onPlay }: AnimePageProps) {
                 className="w-20 sm:w-24 aspect-[2/3] object-cover rounded-xl border border-rose-200/15 shrink-0"
               />
               <div className="space-y-1.5">
-                <p className="text-xs text-rose-200/70">
+                <p className="text-xs text-rose-200/70 tabular-nums">
                   {engine === 'animex' ? 'AnimeX Provider' : 'Gotaku Provider'}
                   {selected.year ? ` · ${selected.year}` : ''}
+                  {episodes.length > 0 ? ` · ${episodes.length} Episodes` : ''}
                 </p>
                 <h2 className="font-display text-xl sm:text-2xl font-bold text-white">
                   {selected.title}
@@ -385,55 +443,108 @@ export function AnimePage({ onPlay }: AnimePageProps) {
           ) : episodes.length === 0 ? (
             <p className="text-sm text-rose-100/60">No episodes available for this title.</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-64 overflow-y-auto pr-1">
-              {episodes.map((ep) => (
-                <button
-                  key={ep.id}
-                  type="button"
-                  onClick={() => {
-                    if (engine === 'animex') {
-                      void loadAnimeXServers(selected.contentId, String(ep.number));
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-80 overflow-y-auto pr-1">
+              {episodes.map((ep) => {
+                const progKeyId = engine === 'animex' ? selected.contentId : ep.id;
+                const prog = getWatchProgress(progKeyId, 0, ep.number);
+                const pct =
+                  prog && prog.duration_seconds > 0
+                    ? Math.min(100, Math.round((prog.position_seconds / prog.duration_seconds) * 100))
+                    : prog && prog.position_seconds > 5
+                      ? 15
+                      : 0;
+                const isWatched =
+                  Boolean(prog) &&
+                  ((prog!.duration_seconds > 0 &&
+                    prog!.position_seconds >= prog!.duration_seconds - 15) ||
+                    pct >= 90);
+                const isInProgress = Boolean(prog && prog.position_seconds > 5 && !isWatched);
+
+                return (
+                  <button
+                    key={ep.id}
+                    type="button"
+                    onClick={() =>
+                      launchAnimeEpisode(selected, episodes, ep, engine, subOrDub, selectedServer)
                     }
-                    playEpisode(ep);
-                  }}
-                  className="glass-btn p-2.5 rounded-xl text-left flex items-center justify-between gap-2 cursor-pointer hover:border-rose-400/50"
-                >
-                  <div className="min-w-0">
-                    <span className="font-mono text-xs font-semibold text-white block">
-                      EP {ep.number}
-                    </span>
-                    <span className="text-[11px] text-rose-100/60 truncate block">
-                      {ep.hasDub ? 'Sub · Dub' : 'Sub'}
-                    </span>
-                  </div>
-                  <Play className="w-3.5 h-3.5 text-rose-300 shrink-0" />
-                </button>
-              ))}
+                    className="relative overflow-hidden glass-btn p-3 rounded-xl text-left flex items-center justify-between gap-2.5 cursor-pointer hover:border-rose-400/50"
+                  >
+                    {ep.thumbnail && (
+                      <img
+                        src={ep.thumbnail}
+                        alt={ep.title || `Episode ${ep.number}`}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        className="w-16 aspect-video rounded-md object-cover shrink-0 border border-rose-200/10"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-semibold text-white tabular-nums">
+                          EP {ep.number}
+                        </span>
+                        {isWatched ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-300">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Watched</span>
+                          </span>
+                        ) : isInProgress ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-amber-200 tabular-nums">
+                            <Clock className="w-3 h-3" />
+                            <span>{pct}%</span>
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="text-xs text-rose-100/75 truncate block mt-0.5">
+                        {ep.title || `Episode ${ep.number}`}
+                      </span>
+                      <span className="text-[10px] text-rose-100/50 truncate block">
+                        {[ep.hasDub ? 'Sub · Dub' : 'Sub', ep.duration].filter(Boolean).join(' · ')}
+                      </span>
+                    </div>
+                    <Play className="w-3.5 h-3.5 text-rose-300 shrink-0" />
+
+                    {pct > 0 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/10">
+                        <div
+                          className={`h-full ${
+                            isWatched
+                              ? 'bg-emerald-400'
+                              : 'bg-gradient-to-r from-rose-500 to-amber-300'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </section>
       )}
 
-      {/* Search Results Grid */}
+      {/* Compact Search Results Grid */}
       {loadingSearch ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="glass-surface rounded-2xl overflow-hidden animate-pulse">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
+          {Array.from({ length: 14 }).map((_, i) => (
+            <div key={i} className="glass-surface rounded-xl overflow-hidden animate-pulse">
               <div className="aspect-[2/3] bg-rose-950/40" />
-              <div className="p-3 space-y-2">
-                <div className="h-3.5 bg-rose-900/40 rounded w-4/5" />
+              <div className="px-2.5 py-2 space-y-1.5">
+                <div className="h-3 bg-rose-900/40 rounded w-4/5" />
+                <div className="h-2.5 bg-rose-900/30 rounded w-1/2" />
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
           {results.map((item) => (
             <button
               key={item.contentId}
               type="button"
               onClick={() => void openAnime(item)}
-              className="group glass-surface rounded-2xl overflow-hidden text-left cursor-pointer transition-transform hover:-translate-y-1"
+              className="group glass-surface rounded-xl overflow-hidden text-left cursor-pointer transition-transform hover:-translate-y-0.5 hover:border-rose-300/25"
             >
               <div className="aspect-[2/3] w-full overflow-hidden bg-[#17080d] relative">
                 <img
@@ -445,11 +556,11 @@ export function AnimePage({ onPlay }: AnimePageProps) {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#080305] via-transparent to-transparent" />
               </div>
-              <div className="p-3 space-y-0.5">
-                <h3 className="font-display text-sm font-semibold text-white truncate">
+              <div className="px-2.5 py-2 space-y-0.5">
+                <h3 className="font-display text-xs sm:text-[13px] font-semibold text-white truncate">
                   {item.title}
                 </h3>
-                <p className="text-xs text-rose-100/60 truncate">
+                <p className="text-[11px] text-rose-100/60 truncate tabular-nums">
                   {[item.type || 'Anime', item.year].filter(Boolean).join(' · ')}
                 </p>
               </div>

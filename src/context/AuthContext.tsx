@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import type {
+  LayoutMode,
   LibraryEntry,
   ReadingProgressEntry,
   UserProfile,
@@ -15,6 +16,10 @@ interface AuthContextValue {
   readingProgress: ReadingProgressEntry[];
   authModalOpen: boolean;
   setAuthModalOpen: (open: boolean) => void;
+  layoutMode: LayoutMode;
+  setLayoutMode: (mode: LayoutMode) => void;
+  appearanceModalOpen: boolean;
+  setAppearanceModalOpen: (open: boolean) => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -31,6 +36,11 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const GUEST_LIB_KEY = 'lupin_guest_library_v1';
 const GUEST_WATCH_KEY = 'lupin_guest_watch_v1';
 const GUEST_READ_KEY = 'lupin_guest_read_v1';
+const LAYOUT_KEY = 'lupin_layout_mode_v1';
+
+function isValidLayout(val: unknown): val is LayoutMode {
+  return val === 'classic' || val === 'sidebar' || val === 'cinematic';
+}
 
 function readLocal<T>(key: string, fallback: T): T {
   try {
@@ -39,6 +49,16 @@ function readLocal<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function readInitialLayout(): LayoutMode {
+  try {
+    const raw = localStorage.getItem(LAYOUT_KEY);
+    if (isValidLayout(raw)) return raw;
+  } catch {
+    // ignore
+  }
+  return 'classic';
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -52,6 +72,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     readLocal(GUEST_READ_KEY, [])
   );
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [layoutMode, setLayoutModeState] = useState<LayoutMode>(readInitialLayout);
+  const [appearanceModalOpen, setAppearanceModalOpen] = useState(false);
+
+  const syncUserLayout = useCallback((u: UserProfile | null) => {
+    if (u && isValidLayout(u.preferred_layout)) {
+      setLayoutModeState(u.preferred_layout);
+      try {
+        localStorage.setItem(LAYOUT_KEY, u.preferred_layout);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
 
   const loadLibrary = useCallback(async () => {
     try {
@@ -75,6 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await apiFetch<{ user: UserProfile | null }>('/api/local/auth/me');
         if (!active) return;
         setUser(res.user);
+        syncUserLayout(res.user);
         if (res.user) {
           await loadLibrary();
         }
@@ -87,7 +121,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [loadLibrary]);
+  }, [loadLibrary, syncUserLayout]);
+
+  const setLayoutMode = useCallback(
+    (mode: LayoutMode) => {
+      setLayoutModeState(mode);
+      try {
+        localStorage.setItem(LAYOUT_KEY, mode);
+      } catch {
+        // ignore
+      }
+      if (user) {
+        setUser((prev) => (prev ? { ...prev, preferred_layout: mode } : prev));
+        void apiFetch<{ user: UserProfile }>('/api/local/auth/profile', {
+          method: 'PATCH',
+          body: JSON.stringify({ preferred_layout: mode }),
+        }).catch(() => {
+          // Ignore background sync failure; localStorage keeps preference
+        });
+      }
+    },
+    [user]
+  );
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -96,10 +151,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
       setUser(res.user);
+      syncUserLayout(res.user);
       await loadLibrary();
       setAuthModalOpen(false);
     },
-    [loadLibrary]
+    [loadLibrary, syncUserLayout]
   );
 
   const register = useCallback(
@@ -109,10 +165,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password, name }),
       });
       setUser(res.user);
+      syncUserLayout(res.user);
       await loadLibrary();
       setAuthModalOpen(false);
     },
-    [loadLibrary]
+    [loadLibrary, syncUserLayout]
   );
 
   const logout = useCallback(async () => {
@@ -123,13 +180,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setReadingProgress(readLocal(GUEST_READ_KEY, []));
   }, []);
 
-  const updateProfile = useCallback(async (patch: Partial<UserProfile>) => {
-    const res = await apiFetch<{ user: UserProfile }>('/api/local/auth/profile', {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    });
-    setUser(res.user);
-  }, []);
+  const updateProfile = useCallback(
+    async (patch: Partial<UserProfile>) => {
+      const res = await apiFetch<{ user: UserProfile }>('/api/local/auth/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      setUser(res.user);
+      syncUserLayout(res.user);
+    },
+    [syncUserLayout]
+  );
 
   const isInLibrary = useCallback(
     (itemId: string, listType: 'watchlist' | 'favorite', mediaType?: string) =>
@@ -153,7 +214,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return res.active;
       }
 
-      // Guest localStorage persistence
       let active = false;
       setLibrary((prev) => {
         const exists = prev.some(
@@ -271,6 +331,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         readingProgress,
         authModalOpen,
         setAuthModalOpen,
+        layoutMode,
+        setLayoutMode,
+        appearanceModalOpen,
+        setAppearanceModalOpen,
         login,
         register,
         logout,

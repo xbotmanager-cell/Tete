@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   Bookmark,
   Check,
+  CheckCircle2,
+  Clock,
   Download,
   Heart,
   Info,
@@ -12,7 +14,12 @@ import {
 import { apiFetch, buildQuery } from '../lib/api';
 import { FALLBACK_ART, normalizeMediaDetail } from '../lib/mediaUtils';
 import { useAuth } from '../context/AuthContext';
-import type { ActivePlaybackTarget, MediaDetail, MediaItem } from '../types/framex';
+import type {
+  ActivePlaybackTarget,
+  MediaDetail,
+  MediaItem,
+  PlayerEpisodeOption,
+} from '../types/framex';
 import { MediaCard } from './MediaCard';
 
 interface TitleDetailModalProps {
@@ -41,6 +48,7 @@ export function TitleDetailModal({
     let active = true;
     setLoading(true);
     setActionNotice(null);
+    setResolvedSubjectId(null);
     setDetail(normalizeMediaDetail(item.raw || item, item));
 
     const prefixParam = item.source === 'showbox' ? 'v2' : 'v1';
@@ -62,7 +70,6 @@ export function TitleDetailModal({
           setSelectedEpisode(norm.seasons[0].episodes[0]?.episode || 1);
         }
 
-        // Resolve MovieBox numeric subjectId if needed
         if (norm.source !== 'showbox') {
           if (/^\d+$/.test(norm.subjectId || '')) {
             setResolvedSubjectId(norm.subjectId!);
@@ -99,16 +106,37 @@ export function TitleDetailModal({
   const inFavorites = isInLibrary(detail.id, 'favorite', detail.type);
 
   const currentSeasonObj = detail.seasons?.find((s) => s.season === selectedSeason);
+  const seasonEpisodes = currentSeasonObj?.episodes || [];
   const savedProgress = getWatchProgress(
     playId,
     detail.type === 'series' ? selectedSeason : 0,
     detail.type === 'series' ? selectedEpisode : 0
   );
 
+  const buildPlayerEpisodes = (se?: number): PlayerEpisodeOption[] => {
+    const targetSeason = detail.seasons?.find((s) => s.season === se) || currentSeasonObj;
+    return (targetSeason?.episodes || []).map((ep) => ({
+      id: ep.id,
+      season: ep.season,
+      episode: ep.episode,
+      title: ep.title,
+      thumbnail: ep.thumbnail,
+      duration: ep.duration,
+      description: ep.description,
+    }));
+  };
+
   const launchPlay = async (se?: number, ep?: number) => {
     setActionNotice(null);
+    const episodesForSeason = buildPlayerEpisodes(se);
+    const currentIdx = episodesForSeason.findIndex((x) => x.episode === ep);
+    const prevEpObj = currentIdx > 0 ? episodesForSeason[currentIdx - 1] : null;
+    const nextEpObj =
+      currentIdx >= 0 && currentIdx < episodesForSeason.length - 1
+        ? episodesForSeason[currentIdx + 1]
+        : null;
+
     if (isShowbox) {
-      // Showbox does not support /v1/stream-url; check /v1/proxy/sources/{slug} honestly
       try {
         const sources = await apiFetch<{
           sources?: Array<{ url?: string; type?: string }>;
@@ -139,7 +167,13 @@ export function TitleDetailModal({
           mediaType: detail.type === 'series' ? 'series' : 'movie',
           season: se,
           episode: ep,
+          episodes: episodesForSeason.length > 0 ? episodesForSeason : undefined,
           initialUrl: firstUrl,
+          hasPrevEpisode: Boolean(prevEpObj),
+          onPrevEpisode: prevEpObj ? () => void launchPlay(se, prevEpObj.episode) : undefined,
+          hasNextEpisode: Boolean(nextEpObj),
+          onNextEpisode: nextEpObj ? () => void launchPlay(se, nextEpObj.episode) : undefined,
+          onSelectEpisode: (chosen) => void launchPlay(chosen.season ?? se, chosen.episode),
         });
       } catch {
         setActionNotice(
@@ -149,13 +183,15 @@ export function TitleDetailModal({
       return;
     }
 
-    const totalEps = currentSeasonObj?.episodes.length || 0;
-    const hasNext = Boolean(detail.type === 'series' && ep && totalEps > ep);
-
     onPlay({
       mode: 'direct',
       title: detail.title,
-      subtitle: se && ep ? `Season ${se} · Episode ${ep}` : detail.year ? String(detail.year) : undefined,
+      subtitle:
+        se && ep
+          ? `Season ${se} · Episode ${ep}`
+          : detail.year
+            ? String(detail.year)
+            : undefined,
       poster: detail.poster,
       provider: 'moviebox',
       contentId: playId,
@@ -164,8 +200,13 @@ export function TitleDetailModal({
       mediaType: detail.type === 'series' ? 'series' : 'movie',
       season: se,
       episode: ep,
-      hasNextEpisode: hasNext,
-      onNextEpisode: hasNext ? () => launchPlay(se, (ep || 1) + 1) : undefined,
+      episodes: episodesForSeason.length > 0 ? episodesForSeason : undefined,
+      availableLanguages: detail.languages,
+      hasPrevEpisode: Boolean(prevEpObj),
+      onPrevEpisode: prevEpObj ? () => void launchPlay(se, prevEpObj.episode) : undefined,
+      hasNextEpisode: Boolean(nextEpObj),
+      onNextEpisode: nextEpObj ? () => void launchPlay(se, nextEpObj.episode) : undefined,
+      onSelectEpisode: (chosen) => void launchPlay(chosen.season ?? se, chosen.episode),
     });
   };
 
@@ -199,7 +240,11 @@ export function TitleDetailModal({
 
   const metaLine = [
     detail.year ? String(detail.year) : null,
-    detail.type === 'series' ? 'TV Series' : 'Feature Film',
+    detail.type === 'series'
+      ? detail.seasons?.length
+        ? `TV Series · ${detail.seasons.length} Season${detail.seasons.length > 1 ? 's' : ''}`
+        : 'TV Series'
+      : 'Feature Film',
     detail.duration ? String(detail.duration) : null,
     detail.rating ? `★ ${detail.rating}` : null,
     detail.source === 'showbox' ? 'Showbox' : 'MovieBox',
@@ -242,13 +287,13 @@ export function TitleDetailModal({
               src={detail.poster || FALLBACK_ART.cinemaHero}
               alt={detail.title}
               referrerPolicy="no-referrer"
-              className="w-32 sm:w-44 aspect-[2/3] object-cover rounded-2xl border border-rose-200/15 shadow-2xl shrink-0 bg-[#1a080e]"
+              className="w-28 sm:w-40 aspect-[2/3] object-cover rounded-2xl border border-rose-200/15 shadow-2xl shrink-0 bg-[#1a080e]"
             />
 
             <div className="flex-1 min-w-0 space-y-4 pt-2 sm:pt-12">
               <div>
                 <p className="text-xs sm:text-sm text-rose-200/75 mb-1.5">{metaLine}</p>
-                <h2 className="font-display text-2xl sm:text-4xl font-bold text-white leading-tight">
+                <h2 className="font-display text-2xl sm:text-4xl font-bold text-white leading-tight text-balance">
                   {detail.title}
                 </h2>
                 {detail.genres.length > 0 && (
@@ -279,7 +324,9 @@ export function TitleDetailModal({
                   <Play className="w-4 h-4 fill-current" />
                   <span>
                     {savedProgress && savedProgress.position_seconds > 10
-                      ? 'Resume Playback'
+                      ? detail.type === 'series'
+                        ? `Resume S${selectedSeason} E${selectedEpisode}`
+                        : 'Resume Playback'
                       : detail.type === 'series'
                         ? `Play S${selectedSeason} E${selectedEpisode}`
                         : 'Play Now'}
@@ -354,11 +401,19 @@ export function TitleDetailModal({
             </div>
           </div>
 
-          {/* Series Seasons & Episodes */}
+          {/* Complete Series & Episode Browser */}
           {detail.type === 'series' && detail.seasons && detail.seasons.length > 0 && (
             <section className="space-y-4 pt-4 border-t border-rose-200/10">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="font-display text-lg font-semibold text-white">Episodes</h3>
+                <div>
+                  <h3 className="font-display text-lg font-semibold text-white">
+                    Seasons & Episodes
+                  </h3>
+                  <p className="text-xs text-rose-100/60 mt-0.5 tabular-nums">
+                    Season {selectedSeason} · {seasonEpisodes.length} Episode
+                    {seasonEpisodes.length === 1 ? '' : 's'}
+                  </p>
+                </div>
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                   {detail.seasons.map((s) => (
                     <button
@@ -380,9 +435,23 @@ export function TitleDetailModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
-                {(currentSeasonObj?.episodes || []).map((ep) => {
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                {seasonEpisodes.map((ep) => {
                   const isSelected = ep.episode === selectedEpisode;
+                  const epProg = getWatchProgress(playId, selectedSeason, ep.episode);
+                  const pct =
+                    epProg && epProg.duration_seconds > 0
+                      ? Math.min(100, Math.round((epProg.position_seconds / epProg.duration_seconds) * 100))
+                      : epProg && epProg.position_seconds > 5
+                        ? 15
+                        : 0;
+                  const isWatched =
+                    Boolean(epProg) &&
+                    ((epProg!.duration_seconds > 0 &&
+                      epProg!.position_seconds >= epProg!.duration_seconds - 15) ||
+                      pct >= 90);
+                  const isInProgress = Boolean(epProg && epProg.position_seconds > 5 && !isWatched);
+
                   return (
                     <button
                       key={`${selectedSeason}-${ep.episode}`}
@@ -391,21 +460,80 @@ export function TitleDetailModal({
                         setSelectedEpisode(ep.episode);
                         void launchPlay(selectedSeason, ep.episode);
                       }}
-                      className={`text-left p-3 rounded-xl border transition-colors flex items-center justify-between gap-3 cursor-pointer ${
+                      className={`relative overflow-hidden text-left p-3 rounded-2xl border transition-colors flex items-start gap-3.5 cursor-pointer ${
                         isSelected
-                          ? 'bg-rose-800/35 border-rose-400/40 text-white'
-                          : 'glass-surface border-rose-200/10 text-rose-100/80 hover:border-rose-300/30'
+                          ? 'bg-rose-900/35 border-rose-400/45 text-white'
+                          : 'glass-surface border-rose-200/10 text-rose-100/85 hover:border-rose-300/35'
                       }`}
                     >
-                      <div className="min-w-0">
-                        <span className="font-mono text-xs text-rose-300 block">
-                          Episode {ep.episode}
-                        </span>
-                        <span className="text-sm font-medium text-white truncate block">
+                      {/* Render genuine API episode thumbnail when provided; clean episode number tile otherwise */}
+                      {ep.thumbnail ? (
+                        <div className="relative w-28 sm:w-32 aspect-video rounded-lg overflow-hidden bg-black/40 shrink-0 border border-rose-200/10">
+                          <img
+                            src={ep.thumbnail}
+                            alt={ep.title || `Episode ${ep.episode}`}
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                            <Play className="w-4 h-4 text-white fill-current opacity-90" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-black/40 border border-rose-200/10 flex flex-col items-center justify-center shrink-0">
+                          <span className="font-mono text-xs font-semibold text-rose-300 tabular-nums">
+                            E{String(ep.episode).padStart(2, '0')}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-[11px] text-rose-300 tabular-nums">
+                            Episode {ep.episode}
+                            {ep.duration ? ` · ${ep.duration}` : ''}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium shrink-0">
+                            {isWatched ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                <span className="text-emerald-300">Watched</span>
+                              </>
+                            ) : isInProgress ? (
+                              <>
+                                <Clock className="w-3.5 h-3.5 text-amber-300" />
+                                <span className="text-amber-200 tabular-nums">Resume · {pct}%</span>
+                              </>
+                            ) : (
+                              <span className="text-rose-100/50">Unwatched</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <h4 className="text-sm font-semibold text-white truncate">
                           {ep.title || `Episode ${ep.episode}`}
-                        </span>
+                        </h4>
+
+                        {ep.description && (
+                          <p className="text-xs text-rose-100/65 line-clamp-2 leading-relaxed">
+                            {ep.description}
+                          </p>
+                        )}
                       </div>
-                      <Play className="w-4 h-4 shrink-0 text-rose-300" />
+
+                      {pct > 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/10">
+                          <div
+                            className={`h-full ${
+                              isWatched
+                                ? 'bg-emerald-400'
+                                : 'bg-gradient-to-r from-rose-500 to-amber-300'
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -451,8 +579,8 @@ export function TitleDetailModal({
           {detail.related && detail.related.length > 0 && (
             <section className="space-y-3 pt-4 border-t border-rose-200/10">
               <h3 className="font-display text-lg font-semibold text-white">Related Titles</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                {detail.related.slice(0, 5).map((rel) => (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                {detail.related.slice(0, 6).map((rel) => (
                   <MediaCard
                     key={`${rel.id}-${rel.slug}`}
                     item={rel}

@@ -1,80 +1,147 @@
-import { useState } from 'react';
-import { AuthProvider } from './context/AuthContext';
-import { Navbar, type AppRoute } from './components/Navbar';
-import { TitleDetailModal } from './components/TitleDetailModal';
-import { VideoPlayerModal } from './components/VideoPlayerModal';
+import { useCallback, useState } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { CatalogProvider } from './context/CatalogContext';
 import { AuthModal } from './components/AuthModal';
-import { HomePage } from './pages/HomePage';
-import { DiscoverPage } from './pages/DiscoverPage';
-import { AnimePage } from './pages/AnimePage';
-import { LiveSportsPage } from './pages/LiveSportsPage';
-import { NovelsPage } from './pages/NovelsPage';
-import { LibraryPage } from './pages/LibraryPage';
+import { AppearanceModal } from './components/AppearanceSwitcher';
+import { ClassicEdition } from './editions/classic/ClassicEdition';
+import { ClassicDetailModal } from './editions/classic/ClassicDetailModal';
+import { ClassicVideoPlayer } from './editions/classic/ClassicVideoPlayer';
+import { SidebarEdition } from './editions/sidebar/SidebarEdition';
+import { SidebarDetailDrawer } from './editions/sidebar/SidebarDetailDrawer';
+import { SidebarVideoPlayer } from './editions/sidebar/SidebarVideoPlayer';
+import { CinematicEdition } from './editions/cinematic/CinematicEdition';
+import { CinematicDetailModal } from './editions/cinematic/CinematicDetailModal';
+import { CinematicVideoPlayer } from './editions/cinematic/CinematicVideoPlayer';
+import type {
+  EditionSection,
+  LibrarySectionTab,
+  LiveSectionTab,
+} from './editions/types';
+import type { CatalogTab } from './hooks/useDiscoverEngine';
 import type { ActivePlaybackTarget, MediaItem } from './types/framex';
 
 function LupinShell() {
-  const [route, setRoute] = useState<AppRoute>('home');
+  const { layoutMode } = useAuth();
+
+  const [section, setSection] = useState<EditionSection>('home');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [discoverTab, setDiscoverTab] = useState<CatalogTab>('trending');
+  const [liveTab, setLiveTab] = useState<LiveSectionTab>('tv');
+  const [libraryTab, setLibraryTab] = useState<LibrarySectionTab>('watchlist');
+
   const [selectedTitle, setSelectedTitle] = useState<MediaItem | null>(null);
   const [playbackTarget, setPlaybackTarget] = useState<ActivePlaybackTarget | null>(null);
 
-  const navigate = (next: AppRoute) => {
-    setRoute(next);
+  const handleNavigateSection = useCallback(
+    (
+      next: EditionSection,
+      opts?: { search?: string; libraryTab?: LibrarySectionTab; liveTab?: LiveSectionTab }
+    ) => {
+      setSection(next);
+      if (next === 'movies') setDiscoverTab('popular_movies');
+      else if (next === 'series') setDiscoverTab('popular_series');
+      else if (next === 'discover' && opts?.search === undefined) {
+        setSearchQuery('');
+      }
+
+      if (opts?.liveTab) setLiveTab(opts.liveTab);
+      else if (next === 'live') setLiveTab('tv');
+      else if (next === 'sports') setLiveTab('sports');
+
+      if (opts?.search !== undefined) setSearchQuery(opts.search);
+      if (opts?.libraryTab) setLibraryTab(opts.libraryTab);
+      else if (next === 'library') setLibraryTab('watchlist');
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    []
+  );
+
+  const handleSearchSubmit = useCallback((query: string) => {
+    setSearchQuery(query);
+    setSection('discover');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const sharedProps = {
+    section,
+    searchQuery,
+    discoverTab,
+    liveTab,
+    libraryTab,
+    onNavigateSection: handleNavigateSection,
+    onSearchSubmit: handleSearchSubmit,
+    onSelectTitle: setSelectedTitle,
+    onPlayTarget: setPlaybackTarget,
   };
 
+  const handlePlayFromDetail = useCallback((target: ActivePlaybackTarget) => {
+    setSelectedTitle(null);
+    setPlaybackTarget(target);
+  }, []);
+
   return (
-    <div className="lupin-canvas min-h-screen flex flex-col pb-20 md:pb-8">
-      <Navbar currentRoute={route} onNavigate={navigate} />
-
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        {route === 'home' && (
-          <HomePage
-            onSelectTitle={setSelectedTitle}
-            onPlayTarget={setPlaybackTarget}
-            onNavigate={navigate}
+    <>
+      {layoutMode === 'classic' && (
+        <>
+          <ClassicEdition {...sharedProps} />
+          <ClassicDetailModal
+            item={selectedTitle}
+            onClose={() => setSelectedTitle(null)}
+            onPlay={handlePlayFromDetail}
+            onSelectRelated={(item) => setSelectedTitle(item)}
           />
-        )}
-        {route === 'discover' && <DiscoverPage onSelectTitle={setSelectedTitle} />}
-        {route === 'anime' && <AnimePage onPlay={setPlaybackTarget} />}
-        {route === 'live' && <LiveSportsPage onPlay={setPlaybackTarget} />}
-        {route === 'novels' && <NovelsPage />}
-        {route === 'library' && (
-          <LibraryPage
-            onSelectTitle={setSelectedTitle}
-            onPlayTarget={setPlaybackTarget}
+          <ClassicVideoPlayer
+            target={playbackTarget}
+            onClose={() => setPlaybackTarget(null)}
           />
-        )}
-      </main>
+        </>
+      )}
 
-      <footer className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-14 pt-6 border-t border-rose-200/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-rose-100/50">
-        <span>LUPIN MOVIES · Dark Glassmorphism Streaming Ecosystem</span>
-        <span>Powered by FRAMEX Media APIs</span>
-      </footer>
+      {layoutMode === 'sidebar' && (
+        <>
+          <SidebarEdition {...sharedProps} />
+          <SidebarDetailDrawer
+            item={selectedTitle}
+            onClose={() => setSelectedTitle(null)}
+            onPlay={handlePlayFromDetail}
+            onSelectRelated={(item) => setSelectedTitle(item)}
+          />
+          <SidebarVideoPlayer
+            target={playbackTarget}
+            onClose={() => setPlaybackTarget(null)}
+          />
+        </>
+      )}
 
-      <TitleDetailModal
-        item={selectedTitle}
-        onClose={() => setSelectedTitle(null)}
-        onPlay={(target) => {
-          setSelectedTitle(null);
-          setPlaybackTarget(target);
-        }}
-        onSelectRelated={(item) => setSelectedTitle(item)}
-      />
-
-      <VideoPlayerModal
-        target={playbackTarget}
-        onClose={() => setPlaybackTarget(null)}
-      />
+      {layoutMode === 'cinematic' && (
+        <>
+          <CinematicEdition {...sharedProps} />
+          <CinematicDetailModal
+            item={selectedTitle}
+            onClose={() => setSelectedTitle(null)}
+            onPlay={handlePlayFromDetail}
+            onSelectRelated={(item) => setSelectedTitle(item)}
+          />
+          <CinematicVideoPlayer
+            target={playbackTarget}
+            onClose={() => setPlaybackTarget(null)}
+          />
+        </>
+      )}
 
       <AuthModal />
-    </div>
+      <AppearanceModal />
+    </>
   );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <LupinShell />
+      <CatalogProvider>
+        <LupinShell />
+      </CatalogProvider>
     </AuthProvider>
   );
 }

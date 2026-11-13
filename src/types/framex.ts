@@ -1,4 +1,5 @@
 export type ProviderSource = 'moviebox' | 'showbox' | string;
+export type LayoutMode = 'classic' | 'sidebar' | 'cinematic';
 
 export interface MediaItem {
   id: string;
@@ -39,6 +40,8 @@ export interface SeasonEpisode {
   id?: string;
   duration?: string | number;
   thumbnail?: string | null;
+  description?: string;
+  airDate?: string;
 }
 
 export interface MediaDetail extends MediaItem {
@@ -79,6 +82,16 @@ export interface SignedStreamResponse {
 
 export type PlayerMode = 'direct' | 'hls' | 'embed';
 
+export interface PlayerEpisodeOption {
+  id?: string;
+  season?: number;
+  episode: number;
+  title?: string;
+  thumbnail?: string | null;
+  duration?: string | number;
+  description?: string;
+}
+
 export interface ActivePlaybackTarget {
   mode: PlayerMode;
   title: string;
@@ -92,6 +105,8 @@ export interface ActivePlaybackTarget {
   season?: number;
   episode?: number;
   totalEpisodesInSeason?: number;
+  episodes?: PlayerEpisodeOption[];
+  availableLanguages?: string[];
   // For direct/signed streams
   initialUrl?: string;
   expiresIn?: number;
@@ -101,7 +116,10 @@ export interface ActivePlaybackTarget {
   animeProviderId?: string;
   // For live TV
   countryCode?: string;
-  // Optional callbacks for next episode
+  // Optional callbacks for episode navigation
+  onSelectEpisode?: (ep: PlayerEpisodeOption) => void;
+  onPrevEpisode?: () => void;
+  hasPrevEpisode?: boolean;
   onNextEpisode?: () => void;
   hasNextEpisode?: boolean;
 }
@@ -113,6 +131,7 @@ export interface UserProfile {
   preferred_quality: string;
   preferred_subtitle_lang: string;
   preferred_audio_lang: string;
+  preferred_layout?: LayoutMode;
   created_at?: string;
 }
 

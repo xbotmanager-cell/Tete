@@ -1,4 +1,4 @@
-import { Bookmark, Compass, Film, Home, Radio, Sparkles, BookOpen, User } from 'lucide-react';
+import { Bookmark, Compass, Film, Home, LayoutTemplate, Radio, Sparkles, BookOpen, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export type AppRoute = 'home' | 'discover' | 'anime' | 'live' | 'novels' | 'library';
@@ -25,7 +25,7 @@ const MOBILE_TABS: Array<{ id: AppRoute; label: string; icon: typeof Home }> = [
 ];
 
 export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
-  const { user } = useAuth();
+  const { user, setAppearanceModalOpen } = useAuth();
 
   return (
     <>
@@ -69,7 +69,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
             })}
           </nav>
 
-          {/* Zone 3: Single primary action (Library / Account) */}
+          {/* Zone 3: Layout Switcher + Library / Account */}
           <div className="flex items-center shrink-0 gap-2">
             <button
               type="button"
@@ -80,6 +80,16 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
               }`}
             >
               <BookOpen className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setAppearanceModalOpen(true)}
+              aria-label="Appearance and layout settings"
+              title="Switch Layout Edition"
+              className="glass-btn min-h-[40px] min-w-[40px] px-2.5 rounded-xl text-rose-100 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <LayoutTemplate className="w-4 h-4" />
+              <span className="hidden lg:inline text-xs font-medium">Layouts</span>
             </button>
             <button
               type="button"

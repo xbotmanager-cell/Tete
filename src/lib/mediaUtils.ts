@@ -172,10 +172,14 @@ export function normalizeMediaDetail(
           return {
             season: seNum,
             episode: epNum,
-            title: pickStr(eo, ['title', 'name']) || `Episode ${epNum}`,
+            title: pickStr(eo, ['title', 'name', 'episodeName']) || `Episode ${epNum}`,
             id: pickStr(eo, ['id', 'episodeId']),
-            duration: pickStr(eo, ['duration', 'runtime']),
-            thumbnail: pickStr(eo, ['thumbnail', 'poster', 'cover']) || null,
+            duration: pickStr(eo, ['duration', 'runtime', 'timeLength']),
+            thumbnail:
+              pickStr(eo, ['thumbnail', 'still', 'still_path', 'image', 'poster', 'cover', 'img']) ||
+              null,
+            description: pickStr(eo, ['description', 'overview', 'synopsis', 'summary', 'intro']),
+            airDate: pickStr(eo, ['airDate', 'releaseDate', 'aired']),
           };
         });
         seasonsMap.set(seNum, eps);
@@ -199,8 +203,14 @@ export function normalizeMediaDetail(
       list.push({
         season: seNum,
         episode: epNum,
-        title: pickStr(ep, ['title', 'name']) || `Episode ${epNum}`,
+        title: pickStr(ep, ['title', 'name', 'episodeName']) || `Episode ${epNum}`,
         id: pickStr(ep, ['id', 'episodeId']),
+        duration: pickStr(ep, ['duration', 'runtime', 'timeLength']),
+        thumbnail:
+          pickStr(ep, ['thumbnail', 'still', 'still_path', 'image', 'poster', 'cover', 'img']) ||
+          null,
+        description: pickStr(ep, ['description', 'overview', 'synopsis', 'summary', 'intro']),
+        airDate: pickStr(ep, ['airDate', 'releaseDate', 'aired']),
       });
       seasonsMap.set(seNum, list);
     }
@@ -220,11 +230,19 @@ export function normalizeMediaDetail(
       )
     : undefined;
 
+  const rawLangs = root.languages || root.audioLanguages || root.langs || root.dubs;
+  const languages = Array.isArray(rawLangs)
+    ? rawLangs
+        .map((l) => (typeof l === 'string' ? l : pickStr(l as Record<string, unknown>, ['code', 'lang', 'name'])))
+        .filter((x): x is string => Boolean(x))
+    : undefined;
+
   return {
     ...base,
     cast,
     seasons: seasons.length > 0 ? seasons : undefined,
     related,
+    languages,
     trailerUrl: pickStr(root, ['trailer', 'trailerUrl']),
   };
 }
