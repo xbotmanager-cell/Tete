@@ -4,12 +4,16 @@
   :root {
     --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
     --font-editorial: 'Cormorant Garamond', Georgia, serif;
+    --font-editorial-serif: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
+    --font-editorial-prose: 'Source Serif 4', Georgia, serif;
     --font-console: 'Space Grotesk', 'Inter', system-ui, sans-serif;
     --font-cinema: 'Bebas Neue', 'Outfit', system-ui, sans-serif;
+    --font-neon: 'Barlow Condensed', 'Outfit', system-ui, sans-serif;
+    --font-minimal: 'DM Sans', 'Plus Jakarta Sans', system-ui, sans-serif;
     --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-    --lupin-bg: #080305;
+    --lupin-bg: #040404;
     --lupin-burgundy: #230811;
     --lupin-crimson: #be123c;
     --lupin-rose: #e11d48;
@@ -33,6 +37,15 @@
     letter-spacing: -0.01em;
   }
 
+  .font-editorial-serif {
+    font-family: var(--font-editorial-serif);
+    letter-spacing: -0.015em;
+  }
+
+  .font-editorial-prose {
+    font-family: var(--font-editorial-prose);
+  }
+
   .font-console {
     font-family: var(--font-console);
     letter-spacing: -0.02em;
@@ -45,6 +58,16 @@
   .font-cinema {
     font-family: var(--font-cinema);
     letter-spacing: 0.04em;
+  }
+
+  .font-neon {
+    font-family: var(--font-neon);
+    letter-spacing: 0.02em;
+  }
+
+  .font-minimal {
+    font-family: var(--font-minimal);
+    letter-spacing: -0.02em;
   }
 
   .font-mono, .tabular-nums {
@@ -149,6 +172,62 @@
   -webkit-text-stroke: 2px rgba(255, 255, 255, 0.35);
   color: #080808;
   text-shadow: 0 8px 24px rgba(0, 0, 0, 0.9);
+}
+
+/* =========================================================
+   EDITION 4: EDITORIAL MAGAZINE (Archival Warm Paper & Ink)
+   ========================================================= */
+.editorial-canvas {
+  background-color: #F7F4EE;
+  color: #1C1917;
+  font-family: var(--font-editorial-prose);
+}
+
+.editorial-paper {
+  background-color: #FBF9F5;
+  border: 1px solid #D6CEBE;
+}
+
+.editorial-limestone {
+  background-color: #EBE6DF;
+  border: 1px solid #D6CEBE;
+}
+
+/* =========================================================
+   EDITION 5: NEON EDITION (Deep Cosmos, Electric Cyan & Magenta)
+   ========================================================= */
+.neon-canvas {
+  background-color: #03050d;
+  background-image:
+    radial-gradient(ellipse 70% 45% at 15% -5%, rgba(0, 240, 255, 0.14) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 45% at 88% 8%, rgba(255, 43, 214, 0.13) 0%, transparent 60%),
+    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+  color: #f0f9ff;
+}
+
+.neon-panel {
+  background: rgba(9, 13, 28, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  box-shadow: 0 0 28px -12px rgba(0, 240, 255, 0.28);
+}
+
+.neon-glow-btn {
+  background: linear-gradient(135deg, #00e5ff 0%, #7c3aed 55%, #ff2bd6 100%);
+  color: #03050d;
+  box-shadow: 0 0 24px -4px rgba(0, 240, 255, 0.45);
+}
+
+/* =========================================================
+   EDITION 6: MINIMALIST GALLERY (Swiss Pure White & Cobalt)
+   ========================================================= */
+.minimalist-canvas {
+  background-color: #FFFFFF;
+  color: #111111;
+  font-family: var(--font-minimal);
 }
 
 /* Custom subtle scrollbars */

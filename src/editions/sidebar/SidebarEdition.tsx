@@ -4,8 +4,11 @@ import {
   BookOpen,
   Clapperboard,
   Film,
+  HelpCircle,
   Home,
+  Info,
   LayoutTemplate,
+  Mail,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -25,6 +28,9 @@ import { SidebarAnime, SidebarDiscover } from './SidebarPages';
 import { LiveSportsPage } from '../../pages/LiveSportsPage';
 import { NovelsPage } from '../../pages/NovelsPage';
 import { LibraryPage } from '../../pages/LibraryPage';
+import { SupportCenterPage } from '../../pages/SupportCenterPage';
+import { AboutCreatorPage } from '../../pages/AboutCreatorPage';
+import { ContactPage } from '../../pages/ContactPage';
 
 const NAV_GROUPS: Array<{
   group: string;
@@ -52,6 +58,14 @@ const NAV_GROUPS: Array<{
     group: 'PERSONAL',
     items: [{ id: 'library', label: 'My Library', icon: Bookmark }],
   },
+  {
+    group: 'INFO & SUPPORT',
+    items: [
+      { id: 'support', label: 'Support Center', icon: HelpCircle },
+      { id: 'about', label: 'About Creator', icon: Info },
+      { id: 'contact', label: 'Contact Us', icon: Mail },
+    ],
+  },
 ];
 
 const SECTION_PATH: Record<EditionSection, string> = {
@@ -64,6 +78,9 @@ const SECTION_PATH: Record<EditionSection, string> = {
   sports: 'sports',
   novels: 'novels',
   library: 'library',
+  support: 'support-center',
+  about: 'about-creator',
+  contact: 'contact',
 };
 
 export function SidebarEdition({
@@ -368,7 +385,33 @@ export function SidebarEdition({
               initialTab={libraryTab}
             />
           )}
+          {section === 'support' && <SupportCenterPage onNavigateSection={handleNav} />}
+          {section === 'about' && <AboutCreatorPage onNavigateSection={handleNav} />}
+          {section === 'contact' && <ContactPage />}
         </main>
+
+        <footer className="max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 border-t border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono text-zinc-500">
+          <span className="text-zinc-300">LUPIN OS · SIDEBAR EDITION</span>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <button type="button" onClick={() => handleNav('support')} className="hover:text-cyan-400 cursor-pointer">
+              Support Center
+            </button>
+            <button type="button" onClick={() => handleNav('about')} className="hover:text-cyan-400 cursor-pointer">
+              About Lupin Starnley
+            </button>
+            <button type="button" onClick={() => handleNav('contact')} className="hover:text-cyan-400 cursor-pointer">
+              Contact Us
+            </button>
+            <button
+              type="button"
+              onClick={() => setAppearanceModalOpen(true)}
+              className="px-3 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-200 hover:border-cyan-400 inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <LayoutTemplate className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Switch Edition</span>
+            </button>
+          </div>
+        </footer>
       </div>
 
       <SidebarCommandSearch

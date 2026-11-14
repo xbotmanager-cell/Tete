@@ -12,6 +12,7 @@ import {
 import { apiFetch, buildQuery } from '../lib/api';
 import { extractArray, FALLBACK_ART } from '../lib/mediaUtils';
 import { useAuth } from '../context/AuthContext';
+import { getEditionTheme } from '../lib/editionTheme';
 import { DomainNoticeBanner } from '../components/DomainNoticeBanner';
 
 interface NovelItem {
@@ -31,38 +32,7 @@ interface ChapterItem {
 
 export function NovelsPage() {
   const { saveReadingProgress, readingProgress, layoutMode } = useAuth();
-  const isSidebar = layoutMode === 'sidebar';
-  const isCinematic = layoutMode === 'cinematic';
-
-  const panelClass = isSidebar
-    ? 'rounded-lg border border-zinc-800 bg-[#0c0c0f]'
-    : isCinematic
-      ? 'rounded-lg bg-[#141414] border border-white/10'
-      : 'glass-surface rounded-3xl';
-
-  const elevatedClass = isSidebar
-    ? 'rounded-lg border border-zinc-800 bg-[#0c0c0f]'
-    : isCinematic
-      ? 'rounded-lg bg-[#141414] border border-white/10'
-      : 'glass-surface-elevated rounded-3xl';
-
-  const primaryBtn = isSidebar
-    ? 'bg-white text-black hover:bg-cyan-300 font-semibold rounded-md'
-    : isCinematic
-      ? 'bg-[#e50914] hover:bg-[#f40612] text-white font-bold rounded'
-      : 'glass-btn-primary text-white font-semibold rounded-xl';
-
-  const secondaryBtn = isSidebar
-    ? 'border border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-zinc-500 rounded-md'
-    : isCinematic
-      ? 'border border-neutral-700 bg-[#1c1c1c] text-white hover:border-white rounded'
-      : 'glass-btn text-amber-100 rounded-xl';
-
-  const headingClass = isSidebar
-    ? 'font-console text-xl sm:text-2xl font-bold text-white'
-    : isCinematic
-      ? 'font-cinema text-3xl sm:text-5xl uppercase tracking-wide text-white leading-none'
-      : 'font-editorial text-3xl sm:text-4xl font-semibold text-amber-50';
+  const t = getEditionTheme(layoutMode);
 
   const [section, setSection] = useState<'home' | 'recommendations' | 'ranks' | 'latest' | 'completed'>('home');
   const [query, setQuery] = useState('');
@@ -197,22 +167,20 @@ export function NovelsPage() {
     const nextChap = currentIdx >= 0 && currentIdx < chapters.length - 1 ? chapters[currentIdx + 1] : null;
 
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className={`${panelClass} p-4 flex flex-wrap items-center justify-between gap-3 sticky top-20 z-30`}>
+      <div className={`max-w-3xl mx-auto space-y-6 ${t.pageContainer}`}>
+        <div className={`${t.panel} p-4 flex flex-wrap items-center justify-between gap-3 sticky top-20 z-30`}>
           <button
             type="button"
             onClick={() => setActiveChapter(null)}
-            className={`${secondaryBtn} h-10 px-3.5 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer`}
+            className={`${t.secondaryBtn} h-10 px-3.5 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer`}
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Chapters</span>
           </button>
 
           <div className="text-center min-w-0 flex-1">
-            <p className="text-xs text-zinc-400 truncate">{selectedNovel.title}</p>
-            <h2 className="font-display text-sm sm:text-base font-semibold text-white truncate">
-              {activeChapter.title}
-            </h2>
+            <p className={`text-xs ${t.muted} truncate`}>{selectedNovel.title}</p>
+            <h2 className="text-sm sm:text-base font-semibold truncate">{activeChapter.title}</h2>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -220,31 +188,31 @@ export function NovelsPage() {
               type="button"
               aria-label="Decrease font size"
               onClick={() => setFontSize((s) => Math.max(14, s - 2))}
-              className={`${secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
+              className={`${t.secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
-            <span className="font-mono text-xs text-zinc-300 w-8 text-center">{fontSize}</span>
+            <span className={`font-mono text-xs ${t.muted} w-8 text-center`}>{fontSize}</span>
             <button
               type="button"
               aria-label="Increase font size"
               onClick={() => setFontSize((s) => Math.min(26, s + 2))}
-              className={`${secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
+              className={`${t.secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        <article className={`${elevatedClass} p-6 sm:p-10`}>
+        <article className={`${t.elevatedPanel} p-6 sm:p-10`}>
           {loadingChapterText ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-7 h-7 animate-spin text-white" />
+              <Loader2 className={`w-7 h-7 animate-spin ${t.accentText}`} />
             </div>
           ) : (
             <div
               style={{ fontSize: `${fontSize}px` }}
-              className="text-zinc-100 leading-[1.85] whitespace-pre-wrap font-serif max-w-[68ch] mx-auto"
+              className={`${t.text} leading-[1.85] whitespace-pre-wrap font-serif max-w-[68ch] mx-auto`}
             >
               {activeChapter.content}
             </div>
@@ -256,7 +224,7 @@ export function NovelsPage() {
             type="button"
             disabled={!prevChap}
             onClick={() => prevChap && void openChapter(prevChap)}
-            className={`${secondaryBtn} h-11 px-5 text-sm font-medium inline-flex items-center gap-2 disabled:opacity-40 cursor-pointer`}
+            className={`${t.secondaryBtn} h-11 px-5 text-sm font-medium inline-flex items-center gap-2 disabled:opacity-40 cursor-pointer`}
           >
             <ChevronLeft className="w-4 h-4" />
             <span>Previous Chapter</span>
@@ -265,7 +233,7 @@ export function NovelsPage() {
             type="button"
             disabled={!nextChap}
             onClick={() => nextChap && void openChapter(nextChap)}
-            className={`${primaryBtn} h-11 px-5 text-sm inline-flex items-center gap-2 disabled:opacity-40 cursor-pointer`}
+            className={`${t.primaryBtn} h-11 px-5 text-sm inline-flex items-center gap-2 disabled:opacity-40 cursor-pointer`}
           >
             <span>Next Chapter</span>
             <ChevronRight className="w-4 h-4" />
@@ -276,12 +244,12 @@ export function NovelsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className={`${panelClass} p-5 sm:p-6 space-y-5`}>
+    <div className={`space-y-6 ${t.pageContainer}`}>
+      <section className={`${t.panel} p-5 sm:p-6 space-y-5`}>
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className={headingClass}>Novel Library</h1>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
+            <h1 className={`${t.heading} text-2xl sm:text-4xl`}>Novel Library</h1>
+            <p className={`text-xs sm:text-sm ${t.muted} mt-0.5`}>
               Curated fiction from NovelHub & NovelStore with persistent reading progress.
             </p>
           </div>
@@ -303,7 +271,7 @@ export function NovelsPage() {
                   setSelectedNovel(null);
                 }}
                 className={`px-3.5 py-2 text-xs font-medium whitespace-nowrap cursor-pointer ${
-                  section === s.id ? primaryBtn : secondaryBtn
+                  section === s.id ? t.tabActive : t.tabIdle
                 }`}
               >
                 {s.label}
@@ -320,18 +288,18 @@ export function NovelsPage() {
           className="flex gap-2.5"
         >
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-zinc-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <Search className={`w-4 h-4 ${t.muted} absolute left-4 top-1/2 -translate-y-1/2`} />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search novels by title or keyword…"
-              className="w-full h-11 pl-11 pr-4 rounded-lg bg-black/50 border border-white/15 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-white/50"
+              className={`w-full h-11 pl-11 pr-4 text-sm ${t.input}`}
             />
           </div>
           <button
             type="submit"
-            className={`${primaryBtn} h-11 px-5 text-sm cursor-pointer`}
+            className={`${t.primaryBtn} h-11 px-5 text-sm cursor-pointer`}
           >
             Search
           </button>
@@ -340,10 +308,9 @@ export function NovelsPage() {
 
       {Boolean(error) && <DomainNoticeBanner error={error} onRetry={() => void loadNovels()} />}
 
-      {/* Recent Reading History Strip */}
       {readingProgress.length > 0 && !selectedNovel && (
         <section className="space-y-3">
-          <h2 className="font-display text-lg font-semibold text-white">Continue Reading</h2>
+          <h2 className={`${t.subHeading} text-lg`}>Continue Reading</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {readingProgress.slice(0, 3).map((rp) => (
               <button
@@ -356,7 +323,7 @@ export function NovelsPage() {
                     cover: rp.cover,
                   })
                 }
-                className={`${panelClass} p-3.5 flex items-center gap-3 text-left cursor-pointer hover:border-white/35`}
+                className={`${t.card} p-3.5 flex items-center gap-3 text-left cursor-pointer`}
               >
                 <img
                   src={rp.cover || FALLBACK_ART.novelCover}
@@ -365,10 +332,8 @@ export function NovelsPage() {
                   className="w-12 h-16 object-cover rounded shrink-0"
                 />
                 <div className="min-w-0">
-                  <p className="font-display text-sm font-semibold text-white truncate">
-                    {rp.novel_title}
-                  </p>
-                  <p className="text-xs text-zinc-400 truncate">{rp.chapter_title}</p>
+                  <p className="text-sm font-semibold truncate">{rp.novel_title}</p>
+                  <p className={`text-xs ${t.muted} truncate`}>{rp.chapter_title}</p>
                 </div>
               </button>
             ))}
@@ -376,13 +341,12 @@ export function NovelsPage() {
         </section>
       )}
 
-      {/* Selected Novel Detail + Chapter Directory */}
       {selectedNovel ? (
-        <section className={`${elevatedClass} p-5 sm:p-7 space-y-6`}>
+        <section className={`${t.elevatedPanel} p-5 sm:p-7 space-y-6`}>
           <button
             type="button"
             onClick={() => setSelectedNovel(null)}
-            className={`${secondaryBtn} h-9 px-3.5 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer`}
+            className={`${t.secondaryBtn} h-9 px-3.5 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer`}
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Novels</span>
@@ -393,41 +357,39 @@ export function NovelsPage() {
               src={selectedNovel.cover || FALLBACK_ART.novelCover}
               alt={selectedNovel.title}
               referrerPolicy="no-referrer"
-              className="w-32 sm:w-40 aspect-[3/4] object-cover rounded-lg border border-white/15 shrink-0"
+              className={`w-32 sm:w-40 aspect-[3/4] object-cover rounded-lg border ${t.border} shrink-0`}
             />
             <div className="space-y-2.5">
-              <p className="text-xs text-zinc-400">
+              <p className={`text-xs ${t.muted}`}>
                 {[selectedNovel.author, selectedNovel.category].filter(Boolean).join(' · ') || 'NovelHub'}
               </p>
-              <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
-                {selectedNovel.title}
-              </h2>
+              <h2 className={`${t.subHeading} text-2xl sm:text-3xl`}>{selectedNovel.title}</h2>
               {selectedNovel.description && (
-                <p className="text-sm text-zinc-300 leading-relaxed max-w-2xl">
+                <p className={`text-sm ${t.text} leading-relaxed max-w-2xl`}>
                   {selectedNovel.description}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="space-y-3 pt-4 border-t border-white/10">
+          <div className={`space-y-3 pt-4 border-t ${t.border}`}>
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-lg font-semibold text-white">Chapters</h3>
+              <h3 className={`${t.subHeading} text-lg`}>Chapters</h3>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   disabled={chapterPage <= 1}
                   onClick={() => void openNovel(selectedNovel, Math.max(1, chapterPage - 1))}
-                  className={`${secondaryBtn} h-8 px-3 text-xs disabled:opacity-40 cursor-pointer`}
+                  className={`${t.secondaryBtn} h-8 px-3 text-xs disabled:opacity-40 cursor-pointer`}
                 >
                   Prev
                 </button>
-                <span className="font-mono text-xs text-zinc-400">Page {chapterPage}</span>
+                <span className={`font-mono text-xs ${t.muted}`}>Page {chapterPage}</span>
                 <button
                   type="button"
                   disabled={chapters.length < 50}
                   onClick={() => void openNovel(selectedNovel, chapterPage + 1)}
-                  className={`${secondaryBtn} h-8 px-3 text-xs disabled:opacity-40 cursor-pointer`}
+                  className={`${t.secondaryBtn} h-8 px-3 text-xs disabled:opacity-40 cursor-pointer`}
                 >
                   Next
                 </button>
@@ -435,8 +397,8 @@ export function NovelsPage() {
             </div>
 
             {loadingChapters ? (
-              <div className="flex items-center gap-2 text-sm text-zinc-400 py-6">
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
+              <div className={`flex items-center gap-2 text-sm ${t.muted} py-6`}>
+                <Loader2 className={`w-4 h-4 animate-spin ${t.accentText}`} />
                 <span>Loading chapters…</span>
               </div>
             ) : (
@@ -446,12 +408,10 @@ export function NovelsPage() {
                     key={ch.id}
                     type="button"
                     onClick={() => void openChapter(ch)}
-                    className={`${secondaryBtn} p-3 text-left flex items-center justify-between gap-2 cursor-pointer`}
+                    className={`${t.secondaryBtn} p-3 text-left flex items-center justify-between gap-2 cursor-pointer`}
                   >
-                    <span className="text-xs sm:text-sm font-medium text-white truncate">
-                      {ch.title}
-                    </span>
-                    <BookOpen className="w-4 h-4 text-zinc-300 shrink-0" />
+                    <span className="text-xs sm:text-sm font-medium truncate">{ch.title}</span>
+                    <BookOpen className={`w-4 h-4 ${t.accentText} shrink-0`} />
                   </button>
                 ))}
               </div>
@@ -461,10 +421,10 @@ export function NovelsPage() {
       ) : loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className={`${panelClass} overflow-hidden animate-pulse`}>
-              <div className="aspect-[3/4] bg-zinc-900" />
+            <div key={i} className={`${t.card} overflow-hidden animate-pulse`}>
+              <div className="aspect-[3/4] bg-current opacity-10" />
               <div className="p-3 space-y-2">
-                <div className="h-3.5 bg-zinc-800 rounded w-4/5" />
+                <div className="h-3.5 bg-current opacity-15 rounded w-4/5" />
               </div>
             </div>
           ))}
@@ -476,9 +436,9 @@ export function NovelsPage() {
               key={novel.id}
               type="button"
               onClick={() => void openNovel(novel)}
-              className={`group ${panelClass} overflow-hidden text-left cursor-pointer transition-transform hover:-translate-y-1`}
+              className={`group ${t.card} overflow-hidden text-left cursor-pointer transition-transform hover:-translate-y-1`}
             >
-              <div className="aspect-[3/4] w-full overflow-hidden bg-black">
+              <div className="aspect-[3/4] w-full overflow-hidden bg-black/20">
                 <img
                   src={novel.cover || FALLBACK_ART.novelCover}
                   alt={novel.title}
@@ -488,10 +448,8 @@ export function NovelsPage() {
                 />
               </div>
               <div className="p-3 space-y-0.5">
-                <h3 className="font-display text-sm font-semibold text-white truncate">
-                  {novel.title}
-                </h3>
-                <p className="text-xs text-zinc-400 truncate">
+                <h3 className="text-sm font-semibold truncate">{novel.title}</h3>
+                <p className={`text-xs ${t.muted} truncate`}>
                   {novel.author || novel.category || 'NovelHub'}
                 </p>
               </div>

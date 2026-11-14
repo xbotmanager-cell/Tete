@@ -19,6 +19,9 @@ import { AnimePage } from '../../pages/AnimePage';
 import { LiveSportsPage } from '../../pages/LiveSportsPage';
 import { NovelsPage } from '../../pages/NovelsPage';
 import { LibraryPage } from '../../pages/LibraryPage';
+import { SupportCenterPage } from '../../pages/SupportCenterPage';
+import { AboutCreatorPage } from '../../pages/AboutCreatorPage';
+import { ContactPage } from '../../pages/ContactPage';
 
 const CLASSIC_NAV: Array<{ id: EditionSection; label: string }> = [
   { id: 'home', label: 'Salon' },
@@ -26,6 +29,9 @@ const CLASSIC_NAV: Array<{ id: EditionSection; label: string }> = [
   { id: 'anime', label: 'Anime' },
   { id: 'live', label: 'Live & Sports' },
   { id: 'novels', label: 'Novels' },
+  { id: 'support', label: 'Support' },
+  { id: 'about', label: 'Creator' },
+  { id: 'contact', label: 'Contact' },
 ];
 
 const CLASSIC_MOBILE: Array<{ id: EditionSection; label: string; icon: typeof Home }> = [
@@ -201,20 +207,46 @@ export function ClassicEdition({
             initialTab={libraryTab}
           />
         )}
+        {section === 'support' && <SupportCenterPage onNavigateSection={onNavigateSection} />}
+        {section === 'about' && <AboutCreatorPage onNavigateSection={onNavigateSection} />}
+        {section === 'contact' && <ContactPage />}
       </main>
 
-      <footer className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-14 pt-6 border-t border-amber-200/15 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-rose-100/55">
+      <footer className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-14 pt-6 border-t border-amber-200/15 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-rose-100/65">
         <span className="font-editorial italic text-base text-amber-100/80">
           LUPIN MOVIES · Classic Editorial Edition
         </span>
-        <button
-          type="button"
-          onClick={() => setAppearanceModalOpen(true)}
-          className="glass-btn px-3.5 py-1.5 rounded-full text-amber-200 hover:text-white inline-flex items-center gap-1.5 cursor-pointer"
-        >
-          <LayoutTemplate className="w-3.5 h-3.5" />
-          <span>Switch Website Edition</span>
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={() => onNavigateSection('support')}
+            className="hover:text-amber-200 transition-colors cursor-pointer"
+          >
+            Support Center
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateSection('about')}
+            className="hover:text-amber-200 transition-colors cursor-pointer"
+          >
+            About Lupin Starnley
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateSection('contact')}
+            className="hover:text-amber-200 transition-colors cursor-pointer"
+          >
+            Contact Us
+          </button>
+          <button
+            type="button"
+            onClick={() => setAppearanceModalOpen(true)}
+            className="glass-btn px-3.5 py-1.5 rounded-full text-amber-200 hover:text-white inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <LayoutTemplate className="w-3.5 h-3.5" />
+            <span>Switch Website Edition</span>
+          </button>
+        </div>
       </footer>
 
       {/* Mobile Velvet Bottom Bar */}

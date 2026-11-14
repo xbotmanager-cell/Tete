@@ -10,7 +10,10 @@ export type EditionSection =
   | 'live'
   | 'sports'
   | 'novels'
-  | 'library';
+  | 'library'
+  | 'support'
+  | 'about'
+  | 'contact';
 
 export type LibrarySectionTab =
   | 'watchlist'

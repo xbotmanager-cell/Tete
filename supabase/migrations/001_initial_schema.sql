@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   preferred_quality TEXT NOT NULL DEFAULT '1080',
   preferred_subtitle_lang TEXT NOT NULL DEFAULT 'en',
   preferred_audio_lang TEXT NOT NULL DEFAULT 'en',
-  preferred_layout TEXT NOT NULL DEFAULT 'classic',
+  preferred_layout TEXT NOT NULL DEFAULT 'cinematic',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

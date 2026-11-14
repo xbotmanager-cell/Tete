@@ -18,6 +18,9 @@ import { CinematicAnime, CinematicDiscover } from './CinematicPages';
 import { LiveSportsPage } from '../../pages/LiveSportsPage';
 import { NovelsPage } from '../../pages/NovelsPage';
 import { LibraryPage } from '../../pages/LibraryPage';
+import { SupportCenterPage } from '../../pages/SupportCenterPage';
+import { AboutCreatorPage } from '../../pages/AboutCreatorPage';
+import { ContactPage } from '../../pages/ContactPage';
 
 const CINEMATIC_NAV: Array<{ id: EditionSection; label: string }> = [
   { id: 'home', label: 'Home' },
@@ -27,6 +30,9 @@ const CINEMATIC_NAV: Array<{ id: EditionSection; label: string }> = [
   { id: 'live', label: 'Live & Sports' },
   { id: 'novels', label: 'Novels' },
   { id: 'library', label: 'My List' },
+  { id: 'support', label: 'Support' },
+  { id: 'about', label: 'Creator' },
+  { id: 'contact', label: 'Contact' },
 ];
 
 const CINEMATIC_MOBILE: Array<{ id: EditionSection; label: string; icon: typeof Home }> = [
@@ -222,20 +228,58 @@ export function CinematicEdition({
             />
           </div>
         )}
+        {section === 'support' && (
+          <div className="pt-20 sm:pt-24 pb-12 px-4 sm:px-8 lg:px-12 max-w-[1440px] mx-auto">
+            <SupportCenterPage onNavigateSection={onNavigateSection} />
+          </div>
+        )}
+        {section === 'about' && (
+          <div className="pt-20 sm:pt-24 pb-12 px-4 sm:px-8 lg:px-12 max-w-[1440px] mx-auto">
+            <AboutCreatorPage onNavigateSection={onNavigateSection} />
+          </div>
+        )}
+        {section === 'contact' && (
+          <div className="pt-20 sm:pt-24 pb-12 px-4 sm:px-8 lg:px-12 max-w-[1440px] mx-auto">
+            <ContactPage />
+          </div>
+        )}
       </main>
 
-      <footer className="px-4 sm:px-8 lg:px-12 py-8 border-t border-neutral-900 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-500">
-        <span className="font-cinema text-lg tracking-wider text-neutral-400">
+      <footer className="px-4 sm:px-8 lg:px-12 py-8 border-t border-neutral-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-400">
+        <span className="font-cinema text-lg tracking-wider text-neutral-300">
           LUPIN MOVIES · CINEMATIC THEATER EDITION
         </span>
-        <button
-          type="button"
-          onClick={() => setAppearanceModalOpen(true)}
-          className="px-3.5 py-1.5 rounded border border-neutral-700 text-neutral-300 hover:border-white hover:text-white inline-flex items-center gap-1.5 cursor-pointer"
-        >
-          <LayoutTemplate className="w-3.5 h-3.5 text-[#e50914]" />
-          <span>Switch Website Edition</span>
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-5">
+          <button
+            type="button"
+            onClick={() => onNavigateSection('support')}
+            className="hover:text-white transition-colors cursor-pointer"
+          >
+            Support Center
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateSection('about')}
+            className="hover:text-white transition-colors cursor-pointer"
+          >
+            About Lupin Starnley
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateSection('contact')}
+            className="hover:text-white transition-colors cursor-pointer"
+          >
+            Contact Us
+          </button>
+          <button
+            type="button"
+            onClick={() => setAppearanceModalOpen(true)}
+            className="px-3.5 py-1.5 rounded border border-neutral-700 text-neutral-300 hover:border-white hover:text-white inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <LayoutTemplate className="w-3.5 h-3.5 text-[#e50914]" />
+            <span>Switch Website Edition</span>
+          </button>
+        </div>
       </footer>
 
       {/* Mobile Theater Bottom Dock */}

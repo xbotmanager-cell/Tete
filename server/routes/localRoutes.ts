@@ -116,9 +116,18 @@ function isHttpsRequest(req: Request): boolean {
   );
 }
 
-async function getAuthenticatedUser(req: Request): Promise<DbUser | null> {
+function extractSessionTokenFromRequest(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    const bearer = authHeader.slice(7).trim();
+    if (bearer) return bearer;
+  }
   const cookies = parseCookies(req);
-  const cookieVal = cookies[SESSION_COOKIE];
+  return cookies[SESSION_COOKIE] || null;
+}
+
+async function getAuthenticatedUser(req: Request): Promise<DbUser | null> {
+  const cookieVal = extractSessionTokenFromRequest(req);
   if (!cookieVal) return null;
 
   const tokenHash = verifySignedSessionCookie(cookieVal);
@@ -127,7 +136,7 @@ async function getAuthenticatedUser(req: Request): Promise<DbUser | null> {
   return findSessionUser(tokenHash);
 }
 
-async function createSession(req: Request, res: Response, userId: number): Promise<void> {
+async function createSession(req: Request, res: Response, userId: number): Promise<string> {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashSessionToken(rawToken);
   const signedCookie = signSessionToken(rawToken);
@@ -146,6 +155,8 @@ async function createSession(req: Request, res: Response, userId: number): Promi
     maxAge: SESSION_DAYS * 86400_000,
     path: '/',
   });
+
+  return signedCookie;
 }
 
 function handleLocalError(res: Response, err: unknown) {
@@ -207,9 +218,9 @@ localRouter.post('/auth/register', async (req, res) => {
 
     const passwordHash = hashPassword(password);
     const user = await createUser({ email, name, passwordHash });
-    await createSession(req, res, user.id);
+    const sessionToken = await createSession(req, res, user.id);
 
-    return res.status(201).json({ user });
+    return res.status(201).json({ user, sessionToken });
   } catch (err) {
     return handleLocalError(res, err);
   }
@@ -230,9 +241,9 @@ localRouter.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    await createSession(req, res, row.id);
+    const sessionToken = await createSession(req, res, row.id);
     const { password_hash: _ph, ...user } = row;
-    return res.json({ user });
+    return res.json({ user, sessionToken });
   } catch (err) {
     return handleLocalError(res, err);
   }
@@ -251,8 +262,7 @@ localRouter.get('/auth/me', async (req, res) => {
 // Auth: Logout
 localRouter.post('/auth/logout', async (req, res) => {
   try {
-    const cookies = parseCookies(req);
-    const cookieVal = cookies[SESSION_COOKIE];
+    const cookieVal = extractSessionTokenFromRequest(req);
     if (cookieVal) {
       const tokenHash = verifySignedSessionCookie(cookieVal);
       if (tokenHash) {
@@ -284,10 +294,8 @@ localRouter.patch('/auth/profile', async (req, res) => {
       : user.preferred_audio_lang;
 
     const rawLayout = req.body?.preferred_layout ? String(req.body.preferred_layout) : user.preferred_layout;
-    const preferred_layout =
-      rawLayout === 'sidebar' || rawLayout === 'cinematic' || rawLayout === 'classic'
-        ? rawLayout
-        : user.preferred_layout;
+    const validLayouts = new Set(['cinematic', 'classic', 'sidebar', 'editorial', 'neon', 'minimalist']);
+    const preferred_layout = validLayouts.has(rawLayout) ? rawLayout : user.preferred_layout;
 
     const updated = await updateUserProfile(user.id, {
       name,

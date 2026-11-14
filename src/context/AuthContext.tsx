@@ -39,7 +39,14 @@ const GUEST_READ_KEY = 'lupin_guest_read_v1';
 const LAYOUT_KEY = 'lupin_layout_mode_v1';
 
 function isValidLayout(val: unknown): val is LayoutMode {
-  return val === 'classic' || val === 'sidebar' || val === 'cinematic';
+  return (
+    val === 'cinematic' ||
+    val === 'classic' ||
+    val === 'sidebar' ||
+    val === 'editorial' ||
+    val === 'neon' ||
+    val === 'minimalist'
+  );
 }
 
 function readLocal<T>(key: string, fallback: T): T {
@@ -58,7 +65,7 @@ function readInitialLayout(): LayoutMode {
   } catch {
     // ignore
   }
-  return 'classic';
+  return 'cinematic';
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

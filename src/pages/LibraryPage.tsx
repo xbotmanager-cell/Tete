@@ -11,10 +11,14 @@ import {
   Settings,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getEditionTheme } from '../lib/editionTheme';
 import type { ActivePlaybackTarget, MediaItem } from '../types/framex';
 import { ClassicMediaCard } from '../editions/classic/ClassicMediaCard';
 import { SidebarGridCard } from '../editions/sidebar/SidebarMediaCard';
 import { CinematicPosterCard } from '../editions/cinematic/CinematicMediaCard';
+import { EditorialFigureCard } from '../editions/editorial/EditorialMediaCard';
+import { NeonPosterTile } from '../editions/neon/NeonMediaCard';
+import { MinimalistPosterCard } from '../editions/minimalist/MinimalistMediaCard';
 import { AppearanceSection } from '../components/AppearanceSwitcher';
 
 export type LibraryTab = 'watchlist' | 'favorites' | 'history' | 'reading' | 'appearance' | 'settings';
@@ -40,6 +44,8 @@ export function LibraryPage({
     logout,
     updateProfile,
   } = useAuth();
+
+  const t = getEditionTheme(layoutMode);
 
   const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [quality, setQuality] = useState(user?.preferred_quality || '1080');
@@ -113,6 +119,39 @@ export function LibraryPage({
         />
       );
     }
+    if (layoutMode === 'editorial') {
+      return (
+        <EditorialFigureCard
+          item={item}
+          onSelect={onSelectTitle}
+          onQuickPlay={extra?.onQuickPlay}
+          progressPercent={extra?.progressPercent}
+          subtitleOverride={extra?.subtitleOverride}
+        />
+      );
+    }
+    if (layoutMode === 'neon') {
+      return (
+        <NeonPosterTile
+          item={item}
+          onSelect={onSelectTitle}
+          onQuickPlay={extra?.onQuickPlay}
+          progressPercent={extra?.progressPercent}
+          subtitleOverride={extra?.subtitleOverride}
+        />
+      );
+    }
+    if (layoutMode === 'minimalist') {
+      return (
+        <MinimalistPosterCard
+          item={item}
+          onSelect={onSelectTitle}
+          onQuickPlay={extra?.onQuickPlay}
+          progressPercent={extra?.progressPercent}
+          subtitleOverride={extra?.subtitleOverride}
+        />
+      );
+    }
     return (
       <ClassicMediaCard
         item={item}
@@ -127,64 +166,22 @@ export function LibraryPage({
   const isSidebar = layoutMode === 'sidebar';
   const isCinematic = layoutMode === 'cinematic';
 
-  const headerClass = isSidebar
-    ? 'rounded-lg border border-zinc-800 bg-[#0c0c0f] p-5 sm:p-6'
-    : isCinematic
-      ? 'rounded-lg bg-[#141414] border border-white/10 p-6 sm:p-8'
-      : 'glass-surface-elevated rounded-3xl p-6 sm:p-8';
-
-  const panelClass = isSidebar
-    ? 'rounded-lg border border-zinc-800 bg-[#0c0c0f] p-6'
-    : isCinematic
-      ? 'rounded-lg bg-[#141414] border border-white/10 p-6'
-      : 'glass-surface rounded-3xl p-6';
-
-  const titleClass = isSidebar
-    ? 'font-console text-xl sm:text-2xl font-bold text-white'
-    : isCinematic
-      ? 'font-cinema text-3xl sm:text-5xl uppercase tracking-wide text-white leading-none'
-      : 'font-editorial text-3xl sm:text-4xl font-semibold text-amber-50';
-
-  const subTextClass = isSidebar
-    ? 'font-mono text-xs text-zinc-400'
-    : isCinematic
-      ? 'text-xs sm:text-sm text-neutral-400'
-      : 'text-sm text-rose-100/70';
-
-  const primaryBtnClass = isSidebar
-    ? 'h-9 px-4 rounded-md bg-white text-black hover:bg-cyan-300 text-xs font-semibold inline-flex items-center gap-2 cursor-pointer transition-colors'
-    : isCinematic
-      ? 'h-10 px-5 rounded bg-[#e50914] hover:bg-[#f40612] text-xs font-bold text-white inline-flex items-center gap-2 cursor-pointer transition-colors'
-      : 'glass-btn-primary h-11 px-5 rounded-full text-sm font-semibold text-white inline-flex items-center gap-2 cursor-pointer';
-
-  const secondaryBtnClass = isSidebar
-    ? 'h-9 px-4 rounded-md border border-zinc-700 bg-zinc-900 text-xs font-medium text-zinc-100 hover:border-zinc-500 inline-flex items-center gap-2 cursor-pointer'
-    : isCinematic
-      ? 'h-10 px-5 rounded border border-neutral-700 bg-[#1c1c1c] text-xs font-semibold text-white hover:border-white inline-flex items-center gap-2 cursor-pointer'
-      : 'glass-btn h-11 px-4 rounded-full text-sm font-medium text-amber-100 inline-flex items-center gap-2 cursor-pointer';
-
-  const inputClass = isSidebar
-    ? 'w-full h-10 px-3 rounded-md bg-zinc-950 border border-zinc-800 text-sm text-white'
-    : isCinematic
-      ? 'w-full h-10 px-3 rounded bg-black border border-neutral-700 text-sm text-white'
-      : 'w-full h-11 px-3.5 rounded-xl bg-black/45 border border-rose-200/15 text-sm text-white';
+  const headerTitleClass = `${t.heading} text-2xl sm:text-4xl`;
+  const sectionHeadingClass = `${t.subHeading} text-xl sm:text-2xl`;
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${t.pageContainer}`}>
       {/* Edition-Matched Header */}
-      <section className={`${headerClass} flex flex-col sm:flex-row sm:items-center justify-between gap-5`}>
+      <section className={`${t.elevatedPanel} p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-5`}>
         <div className="space-y-1">
-          {isSidebar && (
-            <p className="font-mono text-[10px] uppercase tracking-wider text-cyan-400">
-              USER_WORKSPACE · LIBRARY_&_SETTINGS
-            </p>
-          )}
-          {isCinematic && (
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#e50914]">
-              PERSONAL PROFILE & LIST
-            </p>
-          )}
-          <h1 className={titleClass}>
+          <p className={t.monoBadge}>
+            {isSidebar
+              ? 'USER_WORKSPACE · LIBRARY_&_SETTINGS'
+              : isCinematic
+                ? 'PERSONAL PROFILE & LIST'
+                : 'PERSONAL COLLECTION & SETTINGS'}
+          </p>
+          <h1 className={headerTitleClass}>
             {user
               ? isCinematic
                 ? `${user.name}'s My List`
@@ -193,7 +190,7 @@ export function LibraryPage({
                 ? 'My List & Profile'
                 : 'Personal Library'}
           </h1>
-          <p className={subTextClass}>
+          <p className={`text-xs sm:text-sm ${t.muted}`}>
             {user
               ? `${user.email} · Synced across sessions`
               : 'Viewing local guest library. Sign in to persist across devices.'}
@@ -201,12 +198,20 @@ export function LibraryPage({
         </div>
 
         {user ? (
-          <button type="button" onClick={() => void logout()} className={secondaryBtnClass}>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className={`${t.secondaryBtn} h-10 px-4 text-xs sm:text-sm inline-flex items-center gap-2 cursor-pointer`}
+          >
             <LogOut className="w-4 h-4" />
             <span>Sign Out</span>
           </button>
         ) : (
-          <button type="button" onClick={() => setAuthModalOpen(true)} className={primaryBtnClass}>
+          <button
+            type="button"
+            onClick={() => setAuthModalOpen(true)}
+            className={`${t.primaryBtn} h-10 px-5 text-xs sm:text-sm inline-flex items-center gap-2 cursor-pointer`}
+          >
             <LogIn className="w-4 h-4" />
             <span>Sign In / Register</span>
           </button>
@@ -222,34 +227,20 @@ export function LibraryPage({
           { id: 'reading', label: `Reading (${readingProgress.length})`, icon: BookOpen },
           { id: 'appearance', label: 'Editions', icon: LayoutTemplate },
           { id: 'settings', label: 'Preferences', icon: Settings },
-        ].map((t) => {
-          const Icon = t.icon;
-          const active = tab === t.id;
+        ].map((itemTab) => {
+          const Icon = itemTab.icon;
+          const active = tab === itemTab.id;
           return (
             <button
-              key={t.id}
+              key={itemTab.id}
               type="button"
-              onClick={() => setTab(t.id as LibraryTab)}
+              onClick={() => setTab(itemTab.id as LibraryTab)}
               className={`px-3.5 py-2 text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
-                isSidebar
-                  ? `rounded-md font-mono ${
-                      active
-                        ? 'bg-white text-black font-semibold'
-                        : 'border border-zinc-800 bg-zinc-900/70 text-zinc-400 hover:text-white'
-                    }`
-                  : isCinematic
-                    ? `rounded ${
-                        active
-                          ? 'bg-[#e50914] text-white font-bold'
-                          : 'bg-[#141414] border border-neutral-800 text-neutral-300 hover:text-white'
-                      }`
-                    : `rounded-full ${
-                        active ? 'glass-btn-primary text-white' : 'glass-btn text-amber-100/80'
-                      }`
+                active ? t.tabActive : t.tabIdle
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
-              <span>{t.label}</span>
+              <span>{itemTab.label}</span>
             </button>
           );
         })}
@@ -258,11 +249,11 @@ export function LibraryPage({
       {/* Watchlist */}
       {tab === 'watchlist' &&
         (watchlistItems.length === 0 ? (
-          <div className={`${panelClass} text-center text-sm text-zinc-400 py-12`}>
+          <div className={`${t.panel} text-center text-sm ${t.muted} py-12 px-4`}>
             Your watchlist is empty. Click the bookmark button on any movie or series to save it here.
           </div>
         ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
             {watchlistItems.map((item) => (
               <div key={`${item.item_id}-${item.media_type}`}>
                 {renderEditionCard({
@@ -285,13 +276,11 @@ export function LibraryPage({
       {tab === 'favorites' && (
         <div className="space-y-8">
           <section className="space-y-3">
-            <h2 className={isCinematic ? 'font-cinema text-2xl uppercase text-white' : isSidebar ? 'font-console text-lg font-semibold text-white' : 'font-editorial text-2xl font-semibold text-amber-50'}>
-              Favorite Movies
-            </h2>
+            <h2 className={sectionHeadingClass}>Favorite Movies</h2>
             {favoriteMovies.length === 0 ? (
-              <p className={subTextClass}>No favorite movies added yet.</p>
+              <p className={`text-sm ${t.muted}`}>No favorite movies added yet.</p>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
                 {favoriteMovies.map((item) => (
                   <div key={`${item.item_id}-${item.media_type}`}>
                     {renderEditionCard({
@@ -312,13 +301,11 @@ export function LibraryPage({
           </section>
 
           <section className="space-y-3">
-            <h2 className={isCinematic ? 'font-cinema text-2xl uppercase text-white' : isSidebar ? 'font-console text-lg font-semibold text-white' : 'font-editorial text-2xl font-semibold text-amber-50'}>
-              Favorite Series
-            </h2>
+            <h2 className={sectionHeadingClass}>Favorite Series</h2>
             {favoriteSeries.length === 0 ? (
-              <p className={subTextClass}>No favorite series added yet.</p>
+              <p className={`text-sm ${t.muted}`}>No favorite series added yet.</p>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
                 {favoriteSeries.map((item) => (
                   <div key={`${item.item_id}-${item.media_type}`}>
                     {renderEditionCard({
@@ -343,17 +330,15 @@ export function LibraryPage({
       {/* History */}
       {tab === 'history' &&
         (watchProgress.length === 0 ? (
-          <div className={`${panelClass} text-center text-sm text-zinc-400 py-12`}>
+          <div className={`${t.panel} text-center text-sm ${t.muted} py-12 px-4`}>
             No watch history recorded yet.
           </div>
         ) : (
           <div className="space-y-8">
             {continueItems.length > 0 && (
               <section className="space-y-3">
-                <h2 className={isCinematic ? 'font-cinema text-2xl uppercase text-white' : isSidebar ? 'font-console text-lg font-semibold text-white' : 'font-editorial text-2xl font-semibold text-amber-50'}>
-                  Continue Watching
-                </h2>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-3">
+                <h2 className={sectionHeadingClass}>Continue Watching</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
                   {continueItems.map((w) => {
                     const pct =
                       w.duration_seconds > 0
@@ -403,10 +388,8 @@ export function LibraryPage({
             )}
 
             <section className="space-y-3">
-              <h2 className={isCinematic ? 'font-cinema text-2xl uppercase text-white' : isSidebar ? 'font-console text-lg font-semibold text-white' : 'font-editorial text-2xl font-semibold text-amber-50'}>
-                Recently Watched
-              </h2>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-3">
+              <h2 className={sectionHeadingClass}>Recently Watched</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
                 {watchProgress.map((w) => {
                   const pct =
                     w.duration_seconds > 0
@@ -459,16 +442,16 @@ export function LibraryPage({
       {/* Reading */}
       {tab === 'reading' &&
         (readingProgress.length === 0 ? (
-          <div className={`${panelClass} text-center text-sm text-zinc-400 py-12`}>
+          <div className={`${t.panel} text-center text-sm ${t.muted} py-12 px-4`}>
             No novel reading history yet.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {readingProgress.map((r) => (
-              <div key={r.novel_id} className={`${panelClass} !p-4 space-y-1`}>
-                <h3 className="text-sm font-semibold text-white truncate">{r.novel_title}</h3>
-                <p className="text-xs text-neutral-400 truncate">{r.chapter_title}</p>
-                <p className="font-mono text-[11px] text-cyan-400 tabular-nums">
+              <div key={r.novel_id} className={`${t.card} p-4 space-y-1`}>
+                <h3 className="text-sm font-semibold truncate">{r.novel_title}</h3>
+                <p className={`text-xs ${t.muted} truncate`}>{r.chapter_title}</p>
+                <p className={`font-mono text-[11px] ${t.accentText} tabular-nums`}>
                   Progress: {Math.round(r.progress_percent)}%
                 </p>
               </div>
@@ -478,26 +461,24 @@ export function LibraryPage({
 
       {/* Appearance Switcher */}
       {tab === 'appearance' && (
-        <section className={panelClass}>
+        <section className={`${t.panel} p-6`}>
           <AppearanceSection />
         </section>
       )}
 
       {/* Playback & Account Settings */}
       {tab === 'settings' && (
-        <section className={`${panelClass} max-w-xl space-y-5`}>
-          <h2 className={isCinematic ? 'font-cinema text-2xl uppercase text-white' : isSidebar ? 'font-console text-lg font-semibold text-white' : 'font-editorial text-2xl font-semibold text-amber-50'}>
-            Playback & Account Preferences
-          </h2>
+        <section className={`${t.panel} p-6 max-w-xl space-y-5`}>
+          <h2 className={sectionHeadingClass}>Playback & Account Preferences</h2>
           {!user ? (
             <div className="space-y-3">
-              <p className={subTextClass}>
+              <p className={`text-sm ${t.muted}`}>
                 Sign in or create an account to save your default resolution, subtitle language, and audio preferences.
               </p>
               <button
                 type="button"
                 onClick={() => setAuthModalOpen(true)}
-                className={primaryBtnClass}
+                className={`${t.primaryBtn} h-10 px-5 text-xs sm:text-sm inline-flex items-center gap-2 cursor-pointer`}
               >
                 Sign In / Create Account
               </button>
@@ -505,21 +486,21 @@ export function LibraryPage({
           ) : (
             <form onSubmit={handleSavePrefs} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-neutral-300 block">Display Name</label>
+                <label className="text-xs font-medium block">Display Name</label>
                 <input
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className={inputClass}
+                  className={`w-full h-10 px-3 text-sm ${t.input}`}
                 />
               </div>
               <div className="grid sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-neutral-300 block">Quality</label>
+                  <label className="text-xs font-medium block">Quality</label>
                   <select
                     value={quality}
                     onChange={(e) => setQuality(e.target.value)}
-                    className={inputClass}
+                    className={`w-full h-10 px-3 text-sm ${t.input}`}
                   >
                     <option value="1080">1080p HD</option>
                     <option value="720">720p HD</option>
@@ -528,30 +509,33 @@ export function LibraryPage({
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-neutral-300 block">Subtitles</label>
+                  <label className="text-xs font-medium block">Subtitles</label>
                   <input
                     type="text"
                     value={subLang}
                     onChange={(e) => setSubLang(e.target.value)}
                     placeholder="en"
-                    className={inputClass}
+                    className={`w-full h-10 px-3 text-sm ${t.input}`}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-neutral-300 block">Audio</label>
+                  <label className="text-xs font-medium block">Audio</label>
                   <input
                     type="text"
                     value={audioLang}
                     onChange={(e) => setAudioLang(e.target.value)}
                     placeholder="en"
-                    className={inputClass}
+                    className={`w-full h-10 px-3 text-sm ${t.input}`}
                   />
                 </div>
               </div>
 
-              {savedMsg && <p className="text-xs text-emerald-400">{savedMsg}</p>}
+              {savedMsg && <p className="text-xs text-emerald-500">{savedMsg}</p>}
 
-              <button type="submit" className={primaryBtnClass}>
+              <button
+                type="submit"
+                className={`${t.primaryBtn} h-10 px-5 text-xs sm:text-sm inline-flex items-center gap-2 cursor-pointer`}
+              >
                 <Save className="w-4 h-4" />
                 <span>Save Preferences</span>
               </button>

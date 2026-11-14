@@ -14,6 +14,7 @@ import { apiFetch, buildQuery } from '../lib/api';
 import { extractArray, FALLBACK_ART } from '../lib/mediaUtils';
 import type { ActivePlaybackTarget } from '../types/framex';
 import { useAuth } from '../context/AuthContext';
+import { getEditionTheme } from '../lib/editionTheme';
 import { DomainNoticeBanner } from '../components/DomainNoticeBanner';
 
 export type HubTab = 'tv' | 'sports' | 'wrestling';
@@ -25,62 +26,7 @@ interface LiveSportsPageProps {
 
 export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProps) {
   const { layoutMode } = useAuth();
-  const isSidebar = layoutMode === 'sidebar';
-  const isCinematic = layoutMode === 'cinematic';
-
-  const cardSurface = isSidebar
-    ? 'rounded-lg border border-zinc-800 bg-[#0c0c0f]'
-    : isCinematic
-      ? 'rounded-md bg-[#141414] border border-white/10'
-      : 'glass-surface rounded-2xl';
-
-  const panelSurface = isSidebar
-    ? 'rounded-lg border border-zinc-800 bg-[#0c0c0f]'
-    : isCinematic
-      ? 'rounded-lg bg-[#141414] border border-white/10'
-      : 'glass-surface-elevated rounded-3xl';
-
-  const primaryBtn = isSidebar
-    ? 'bg-white text-black hover:bg-cyan-300 font-semibold rounded-md'
-    : isCinematic
-      ? 'bg-[#e50914] hover:bg-[#f40612] text-white font-bold rounded'
-      : 'glass-btn-primary text-white font-semibold rounded-xl';
-
-  const secondaryBtn = isSidebar
-    ? 'border border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-zinc-500 rounded-md'
-    : isCinematic
-      ? 'border border-neutral-700 bg-[#1c1c1c] text-white hover:border-white rounded'
-      : 'glass-btn text-amber-100 rounded-xl';
-
-  const accentText = isSidebar
-    ? 'text-cyan-400'
-    : isCinematic
-      ? 'text-[#e50914]'
-      : 'text-rose-300';
-
-  const highlightText = isSidebar
-    ? 'text-cyan-300'
-    : isCinematic
-      ? 'text-white'
-      : 'text-amber-300';
-
-  const mutedText = isSidebar
-    ? 'text-zinc-400'
-    : isCinematic
-      ? 'text-neutral-400'
-      : 'text-rose-100/60';
-
-  const inputSurface = isSidebar
-    ? 'rounded-md bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-500'
-    : isCinematic
-      ? 'rounded bg-[#141414] border border-neutral-700 text-white placeholder:text-neutral-500'
-      : 'rounded-xl bg-black/50 border border-rose-200/15 text-white placeholder:text-rose-100/40';
-
-  const dividerClass = isSidebar
-    ? 'border-zinc-800 divide-zinc-800'
-    : isCinematic
-      ? 'border-white/10 divide-white/10'
-      : 'border-rose-200/10 divide-rose-200/10';
+  const t = getEditionTheme(layoutMode);
 
   const [tab, setTab] = useState<HubTab>(initialTab);
   const [error, setError] = useState<unknown>(null);
@@ -135,7 +81,6 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
   } | null>(null);
   const [loadingWrestling, setLoadingWrestling] = useState(false);
 
-  // Load Live TV
   const loadTv = useCallback(async () => {
     setLoadingTv(true);
     setError(null);
@@ -262,7 +207,6 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
     }
   };
 
-  // Load Sports
   const loadSports = useCallback(async () => {
     setLoadingSports(true);
     setError(null);
@@ -322,7 +266,6 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
     }
   };
 
-  // Load Wrestling
   const loadWrestling = useCallback(async () => {
     setLoadingWrestling(true);
     setError(null);
@@ -387,58 +330,39 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
     return name.includes(channelFilter.trim().toLowerCase());
   });
 
+  const logoWellClass = t.isLight
+    ? 'bg-stone-100 border border-stone-300'
+    : 'bg-black/45 border border-white/10';
+
   return (
-    <div className="space-y-6">
-      {/* Banner */}
-      <section className={`relative overflow-hidden ${panelSurface} p-6 sm:p-8`}>
+    <div className={`space-y-6 ${t.pageContainer}`}>
+      {/* Hero Arena Header (Dark photographic stage with intentional white text inside scrim) */}
+      <section className="relative overflow-hidden rounded-lg border border-black/20 bg-neutral-950 text-white p-6 sm:p-8">
         <img
           src={FALLBACK_ART.sportsArena}
           alt="Live TV and Sports Arena"
-          className="absolute inset-0 w-full h-full object-cover opacity-30"
+          className="absolute inset-0 w-full h-full object-cover opacity-35"
         />
-        <div
-          className={`absolute inset-0 ${
-            isSidebar
-              ? 'bg-gradient-to-r from-[#09090b] via-[#09090b]/90 to-transparent'
-              : isCinematic
-                ? 'bg-gradient-to-r from-[#040404] via-[#040404]/85 to-transparent'
-                : 'bg-gradient-to-r from-[#080305] via-[#17060c]/85 to-transparent'
-          }`}
-        />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/80 to-black/35" />
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            {isSidebar && (
-              <p className="font-mono text-[10px] uppercase tracking-wider text-cyan-400">
-                BROADCAST_TELEMETRY · TVGARDEN_GOALNIVO
-              </p>
-            )}
-            {isCinematic && (
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#e50914]">
-                LIVE BROADCASTS & ARENA
-              </p>
-            )}
-            <h1
-              className={
-                isSidebar
-                  ? 'font-console text-2xl sm:text-3xl font-bold text-white'
-                  : isCinematic
-                    ? 'font-cinema text-4xl sm:text-6xl uppercase tracking-wide text-white leading-none'
-                    : 'font-editorial text-3xl sm:text-4xl font-semibold text-amber-50'
-              }
-            >
+            <p className="font-mono text-[11px] uppercase tracking-widest text-amber-300">
+              LIVE BROADCASTS & ARENA
+            </p>
+            <h1 className="font-display text-3xl sm:text-5xl font-bold text-white leading-tight mt-1">
               Live Broadcasts & Sports Center
             </h1>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+            <p className="text-xs sm:text-sm text-neutral-300 mt-1">
               International Live TV channels, live football coverage & analytics, and Wrestling replays.
             </p>
           </div>
 
-          <div className="inline-flex p-1 rounded-lg bg-black/60 border border-white/15 self-start">
+          <div className="inline-flex p-1 rounded-lg bg-black/70 border border-white/20 self-start">
             <button
               type="button"
               onClick={() => setTab('tv')}
-              className={`px-4 py-2 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                tab === 'tv' ? primaryBtn : 'text-zinc-400 hover:text-white'
+              className={`px-4 py-2 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap rounded ${
+                tab === 'tv' ? 'bg-white text-black font-semibold' : 'text-neutral-300 hover:text-white'
               }`}
             >
               <Tv className="w-3.5 h-3.5" />
@@ -447,8 +371,8 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
             <button
               type="button"
               onClick={() => setTab('sports')}
-              className={`px-4 py-2 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                tab === 'sports' ? primaryBtn : 'text-zinc-400 hover:text-white'
+              className={`px-4 py-2 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap rounded ${
+                tab === 'sports' ? 'bg-white text-black font-semibold' : 'text-neutral-300 hover:text-white'
               }`}
             >
               <Trophy className="w-3.5 h-3.5" />
@@ -457,8 +381,8 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
             <button
               type="button"
               onClick={() => setTab('wrestling')}
-              className={`px-4 py-2 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                tab === 'wrestling' ? primaryBtn : 'text-zinc-400 hover:text-white'
+              className={`px-4 py-2 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap rounded ${
+                tab === 'wrestling' ? 'bg-white text-black font-semibold' : 'text-neutral-300 hover:text-white'
               }`}
             >
               <Swords className="w-3.5 h-3.5" />
@@ -482,12 +406,9 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
       {/* TAB 1: LIVE TV */}
       {tab === 'tv' && (
         <div className="space-y-8">
-          {/* Citizen Digital Featured Channels */}
           {citizenChannels.length > 0 && (
             <section className="space-y-3.5">
-              <h2 className="font-display text-xl font-semibold text-white">
-                Featured Live Channels
-              </h2>
+              <h2 className={`${t.subHeading} text-xl`}>Featured Live Channels</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                 {citizenChannels.map((ch) => {
                   const id = String(ch.id || ch.channelId || '');
@@ -496,10 +417,10 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                   return (
                     <div
                       key={id}
-                      className={`${cardSurface} p-4 flex flex-col justify-between gap-4`}
+                      className={`${t.card} p-4 flex flex-col justify-between gap-4`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-black/45 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                        <div className={`w-12 h-12 rounded-xl ${logoWellClass} flex items-center justify-center overflow-hidden shrink-0`}>
                           {logo ? (
                             <img
                               src={logo}
@@ -508,14 +429,12 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                               className="w-full h-full object-contain p-1"
                             />
                           ) : (
-                            <Radio className="w-5 h-5 text-zinc-300" />
+                            <Radio className={`w-5 h-5 ${t.muted}`} />
                           )}
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-display text-sm font-semibold text-white truncate">
-                            {name}
-                          </h3>
-                          <p className="text-xs text-zinc-400">
+                          <h3 className="text-sm font-semibold truncate">{name}</h3>
+                          <p className={`text-xs ${t.muted}`}>
                             {ch.isLive ? 'On Air · Live' : 'Channel Stream'}
                           </p>
                         </div>
@@ -525,7 +444,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                         <button
                           type="button"
                           onClick={() => void playCitizenChannel(ch)}
-                          className={`${primaryBtn} flex-1 h-9 text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer`}
+                          className={`${t.primaryBtn} flex-1 h-9 text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer`}
                         >
                           <Play className="w-3.5 h-3.5 fill-current" />
                           <span>Watch</span>
@@ -534,7 +453,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                           type="button"
                           onClick={() => void openSchedule(ch)}
                           aria-label={`Schedule for ${name}`}
-                          className={`${secondaryBtn} h-9 px-3 text-xs inline-flex items-center gap-1.5 cursor-pointer`}
+                          className={`${t.secondaryBtn} h-9 px-3 text-xs inline-flex items-center gap-1.5 cursor-pointer`}
                         >
                           <Calendar className="w-3.5 h-3.5" />
                           <span>Guide</span>
@@ -547,31 +466,30 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
             </section>
           )}
 
-          {/* Programme Schedule Drawer */}
           {selectedScheduleChannel && (
-            <section className={`${panelSurface} p-5 space-y-3`}>
+            <section className={`${t.elevatedPanel} p-5 space-y-3`}>
               <div className="flex items-center justify-between">
-                <h3 className="font-display text-lg font-semibold text-white">
+                <h3 className={`${t.subHeading} text-lg`}>
                   {selectedScheduleChannel.name} — Programme Schedule
                 </h3>
                 <button
                   type="button"
                   onClick={() => setSelectedScheduleChannel(null)}
-                  className={`${secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
+                  className={`${t.secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
               {selectedScheduleChannel.items.length === 0 ? (
-                <p className="text-sm text-zinc-400">No schedule listings returned for today.</p>
+                <p className={`text-sm ${t.muted}`}>No schedule listings returned for today.</p>
               ) : (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto">
                   {selectedScheduleChannel.items.map((prog, idx) => (
-                    <div key={idx} className={`${cardSurface} p-3 space-y-0.5`}>
-                      <p className="font-mono text-xs text-zinc-300">
+                    <div key={idx} className={`${t.card} p-3 space-y-0.5`}>
+                      <p className={`font-mono text-xs ${t.accentText}`}>
                         {String(prog.time || prog.startTime || '')}
                       </p>
-                      <p className="text-sm font-medium text-white truncate">
+                      <p className="text-sm font-medium truncate">
                         {String(prog.title || prog.name || 'Programme')}
                       </p>
                     </div>
@@ -581,15 +499,14 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
             </section>
           )}
 
-          {/* TVGarden Global Country Directory */}
           <section className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="font-display text-xl font-semibold text-white flex items-center gap-2">
-                  <Globe className={`w-5 h-5 ${accentText}`} />
+                <h2 className={`${t.subHeading} text-xl flex items-center gap-2`}>
+                  <Globe className={`w-5 h-5 ${t.accentText}`} />
                   <span>Global Channels Directory</span>
                 </h2>
-                <p className={`text-xs ${mutedText} mt-0.5`}>
+                <p className={`text-xs ${t.muted} mt-0.5`}>
                   Browse TVGarden channels by country (HLS proxy & YouTube live streams).
                 </p>
               </div>
@@ -599,15 +516,13 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                   aria-label="Select country"
                   value={selectedCountry}
                   onChange={(e) => setSelectedCountry(e.target.value)}
-                  className={`h-10 px-3 text-xs ${inputSurface}`}
+                  className={`h-10 px-3 text-xs ${t.input}`}
                 >
                   {countries.length === 0 ? (
-                    <option value="us" className="bg-zinc-950">
-                      United States (us)
-                    </option>
+                    <option value="us">United States (us)</option>
                   ) : (
                     countries.map((c) => (
-                      <option key={c.code} value={c.code} className="bg-zinc-950">
+                      <option key={c.code} value={c.code}>
                         {c.name} ({c.code.toUpperCase()})
                       </option>
                     ))
@@ -618,14 +533,14 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                   value={channelFilter}
                   onChange={(e) => setChannelFilter(e.target.value)}
                   placeholder="Filter channels…"
-                  className={`h-10 px-3.5 text-xs ${inputSurface}`}
+                  className={`h-10 px-3.5 text-xs ${t.input}`}
                 />
               </div>
             </div>
 
             {loadingTv ? (
-              <div className={`flex items-center gap-2 text-sm ${mutedText} py-8`}>
-                <Loader2 className={`w-5 h-5 animate-spin ${accentText}`} />
+              <div className={`flex items-center gap-2 text-sm ${t.muted} py-8`}>
+                <Loader2 className={`w-5 h-5 animate-spin ${t.accentText}`} />
                 <span>Loading TVGarden channels…</span>
               </div>
             ) : (
@@ -639,10 +554,10 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                       key={id}
                       type="button"
                       onClick={() => void playGardenChannel(ch)}
-                      className={`${cardSurface} p-3.5 flex items-center justify-between gap-3 text-left hover:border-white/35 transition-colors cursor-pointer`}
+                      className={`${t.card} p-3.5 flex items-center justify-between gap-3 text-left transition-colors cursor-pointer`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-lg bg-black/45 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                        <div className={`w-10 h-10 rounded-lg ${logoWellClass} flex items-center justify-center overflow-hidden shrink-0`}>
                           {logo ? (
                             <img
                               src={logo}
@@ -651,17 +566,17 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                               className="w-full h-full object-contain p-1"
                             />
                           ) : (
-                            <Tv className="w-4 h-4 text-zinc-300" />
+                            <Tv className={`w-4 h-4 ${t.muted}`} />
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{name}</p>
-                          <p className="text-[11px] text-zinc-400 truncate">
+                          <p className="text-sm font-medium truncate">{name}</p>
+                          <p className={`text-[11px] ${t.muted} truncate`}>
                             {ch.hasHls ? 'HLS Relay' : ch.hasYoutube ? 'YouTube Live' : 'Broadcast'}
                           </p>
                         </div>
                       </div>
-                      <Play className="w-4 h-4 text-zinc-300 shrink-0" />
+                      <Play className={`w-4 h-4 ${t.accentText} shrink-0`} />
                     </button>
                   );
                 })}
@@ -687,7 +602,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                   type="button"
                   onClick={() => setSportsSubTab(s.id as typeof sportsSubTab)}
                   className={`px-3.5 py-2 text-xs font-medium whitespace-nowrap cursor-pointer ${
-                    sportsSubTab === s.id ? primaryBtn : secondaryBtn
+                    sportsSubTab === s.id ? t.tabActive : t.tabIdle
                   }`}
                 >
                   {s.label}
@@ -697,7 +612,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
 
             {sportsSubTab === 'rankings' && (
               <div className="flex items-center gap-2">
-                <label htmlFor="league-id" className="text-xs text-zinc-400">
+                <label htmlFor="league-id" className={`text-xs ${t.muted}`}>
                   League ID:
                 </label>
                 <input
@@ -705,27 +620,27 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                   type="text"
                   value={leagueId}
                   onChange={(e) => setLeagueId(e.target.value)}
-                  className="w-24 h-9 px-2.5 rounded-lg bg-black/50 border border-white/15 text-xs font-mono text-white"
+                  className={`w-24 h-9 px-2.5 text-xs font-mono ${t.input}`}
                 />
               </div>
             )}
           </div>
 
           {loadingSports ? (
-            <div className="flex items-center gap-2 text-sm text-zinc-400 py-10">
-              <Loader2 className="w-5 h-5 animate-spin text-white" />
+            <div className={`flex items-center gap-2 text-sm ${t.muted} py-10`}>
+              <Loader2 className={`w-5 h-5 animate-spin ${t.accentText}`} />
               <span>Loading GoalNivo sports data…</span>
             </div>
           ) : sportsSubTab === 'rankings' ? (
-            <div className={`${panelSurface} overflow-hidden`}>
+            <div className={`${t.panel} overflow-hidden`}>
               {rankings.length === 0 ? (
-                <p className={`p-8 text-center text-sm ${mutedText}`}>
+                <p className={`p-8 text-center text-sm ${t.muted}`}>
                   No standings data available for League ID {leagueId}.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs sm:text-sm">
-                    <thead className={`border-b ${dividerClass} ${mutedText}`}>
+                    <thead className={`border-b ${t.border} ${t.muted}`}>
                       <tr>
                         <th className="p-3.5">#</th>
                         <th className="p-3.5">Club</th>
@@ -736,20 +651,20 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                         <th className="p-3.5 text-right font-mono">PTS</th>
                       </tr>
                     </thead>
-                    <tbody className={`divide-y ${dividerClass} tabular-nums`}>
+                    <tbody className={`divide-y ${t.divide} tabular-nums`}>
                       {rankings.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-white/5">
-                          <td className={`p-3.5 font-mono ${accentText}`}>
+                        <tr key={idx}>
+                          <td className={`p-3.5 font-mono ${t.accentText}`}>
                             {String(row.rank || row.position || idx + 1)}
                           </td>
-                          <td className="p-3.5 font-medium text-white">
+                          <td className="p-3.5 font-medium">
                             {String(row.teamName || row.name || 'Team')}
                           </td>
                           <td className="p-3.5 text-right font-mono">{String(row.played ?? row.matches ?? '-')}</td>
                           <td className="p-3.5 text-right font-mono">{String(row.win ?? row.wins ?? '-')}</td>
                           <td className="p-3.5 text-right font-mono">{String(row.draw ?? row.draws ?? '-')}</td>
                           <td className="p-3.5 text-right font-mono">{String(row.loss ?? row.losses ?? '-')}</td>
-                          <td className={`p-3.5 text-right font-mono font-semibold ${highlightText}`}>
+                          <td className={`p-3.5 text-right font-mono font-semibold ${t.accentText}`}>
                             {String(row.points ?? row.pts ?? '-')}
                           </td>
                         </tr>
@@ -776,23 +691,19 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                 return (
                   <div
                     key={matchId}
-                    className={`${cardSurface} p-4 space-y-4 flex flex-col justify-between`}
+                    className={`${t.card} p-4 space-y-4 flex flex-col justify-between`}
                   >
                     <div className="space-y-2">
-                      <p className="text-xs text-zinc-400 truncate">
+                      <p className={`text-xs ${t.muted} truncate`}>
                         {String(m.leagueName || m.competition || 'Football')}
                         {m.statusText ? ` · ${String(m.statusText)}` : ''}
                       </p>
                       <div className="flex items-center justify-between gap-3">
-                        <span className="font-display text-sm font-semibold text-white truncate flex-1">
-                          {home}
-                        </span>
-                        <span className={`font-mono text-base font-bold ${highlightText} tabular-nums shrink-0`}>
+                        <span className="text-sm font-semibold truncate flex-1">{home}</span>
+                        <span className={`font-mono text-base font-bold ${t.accentText} tabular-nums shrink-0`}>
                           {score}
                         </span>
-                        <span className="font-display text-sm font-semibold text-white truncate flex-1 text-right">
-                          {away}
-                        </span>
+                        <span className="text-sm font-semibold truncate flex-1 text-right">{away}</span>
                       </div>
                     </div>
 
@@ -800,7 +711,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                       <button
                         type="button"
                         onClick={() => void inspectMatch(matchId)}
-                        className={`${secondaryBtn} flex-1 h-9 text-xs font-medium cursor-pointer`}
+                        className={`${t.secondaryBtn} flex-1 h-9 text-xs font-medium cursor-pointer`}
                       >
                         Stats & Lineups
                       </button>
@@ -818,7 +729,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                               initialUrl: proxyUrl,
                             })
                           }
-                          className={`${primaryBtn} h-9 px-3.5 text-xs inline-flex items-center gap-1.5 cursor-pointer`}
+                          className={`${t.primaryBtn} h-9 px-3.5 text-xs inline-flex items-center gap-1.5 cursor-pointer`}
                         >
                           <Play className="w-3.5 h-3.5 fill-current" />
                           <span>Watch</span>
@@ -831,17 +742,14 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
             </div>
           )}
 
-          {/* Match Detail Inspector */}
           {activeMatchId && (
-            <section className={`${panelSurface} p-5 sm:p-6 space-y-4`}>
+            <section className={`${t.elevatedPanel} p-5 sm:p-6 space-y-4`}>
               <div className="flex items-center justify-between">
-                <h3 className="font-display text-lg font-semibold text-white">
-                  Match Center · {activeMatchId}
-                </h3>
+                <h3 className={`${t.subHeading} text-lg`}>Match Center · {activeMatchId}</h3>
                 <button
                   type="button"
                   onClick={() => setActiveMatchId(null)}
-                  className={`${secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
+                  className={`${t.secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -854,7 +762,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                     type="button"
                     onClick={() => setMatchDetailTab(dt)}
                     className={`px-3.5 py-1.5 text-xs font-medium capitalize cursor-pointer ${
-                      matchDetailTab === dt ? primaryBtn : secondaryBtn
+                      matchDetailTab === dt ? t.tabActive : t.tabIdle
                     }`}
                   >
                     {dt === 'h2h' ? 'Head-to-Head' : dt}
@@ -863,12 +771,12 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
               </div>
 
               {loadingMatchDetail ? (
-                <div className="flex items-center gap-2 text-sm text-zinc-400 py-6">
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <div className={`flex items-center gap-2 text-sm ${t.muted} py-6`}>
+                  <Loader2 className={`w-4 h-4 animate-spin ${t.accentText}`} />
                   <span>Loading match telemetry…</span>
                 </div>
               ) : (
-                <pre className="text-xs font-mono text-zinc-200 bg-black/50 border border-white/10 rounded-xl p-4 overflow-x-auto max-h-72">
+                <pre className={`text-xs font-mono ${t.card} p-4 overflow-x-auto max-h-72`}>
                   {JSON.stringify(
                     matchDetailTab === 'events'
                       ? matchDetailData.events
@@ -891,7 +799,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
       {tab === 'wrestling' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between gap-3">
-            <div className="inline-flex p-1 rounded-lg bg-black/50 border border-white/10">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => {
@@ -899,7 +807,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                   setWrestlingPage(1);
                 }}
                 className={`px-3.5 py-1.5 text-xs font-medium cursor-pointer ${
-                  wrestlingCatalog === 'official' ? primaryBtn : 'text-zinc-400'
+                  wrestlingCatalog === 'official' ? t.tabActive : t.tabIdle
                 }`}
               >
                 Official Catalog
@@ -911,7 +819,7 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                   setWrestlingPage(1);
                 }}
                 className={`px-3.5 py-1.5 text-xs font-medium cursor-pointer ${
-                  wrestlingCatalog === 'archive' ? primaryBtn : 'text-zinc-400'
+                  wrestlingCatalog === 'archive' ? t.tabActive : t.tabIdle
                 }`}
               >
                 Archive
@@ -920,15 +828,13 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
           </div>
 
           {selectedWrestlingEvent && (
-            <section className={`${panelSurface} p-5 space-y-3`}>
+            <section className={`${t.elevatedPanel} p-5 space-y-3`}>
               <div className="flex items-center justify-between">
-                <h3 className="font-display text-lg font-semibold text-white">
-                  {selectedWrestlingEvent.title}
-                </h3>
+                <h3 className={`${t.subHeading} text-lg`}>{selectedWrestlingEvent.title}</h3>
                 <button
                   type="button"
                   onClick={() => setSelectedWrestlingEvent(null)}
-                  className={`${secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
+                  className={`${t.secondaryBtn} w-9 h-9 flex items-center justify-center cursor-pointer`}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -939,12 +845,12 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                     key={idx}
                     type="button"
                     onClick={() => void playWrestlingPart(part, selectedWrestlingEvent.title)}
-                    className={`${secondaryBtn} p-3 flex items-center justify-between text-left cursor-pointer`}
+                    className={`${t.secondaryBtn} p-3 flex items-center justify-between text-left cursor-pointer`}
                   >
-                    <span className="text-xs font-medium text-white truncate">
+                    <span className="text-xs font-medium truncate">
                       {String(part.label || part.title || `Part ${idx + 1}`)}
                     </span>
-                    <Play className="w-4 h-4 text-zinc-300 shrink-0" />
+                    <Play className={`w-4 h-4 ${t.accentText} shrink-0`} />
                   </button>
                 ))}
               </div>
@@ -952,8 +858,8 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
           )}
 
           {loadingWrestling ? (
-            <div className="flex items-center gap-2 text-sm text-zinc-400 py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-white" />
+            <div className={`flex items-center gap-2 text-sm ${t.muted} py-8`}>
+              <Loader2 className={`w-5 h-5 animate-spin ${t.accentText}`} />
               <span>Loading wrestling events…</span>
             </div>
           ) : (
@@ -963,12 +869,12 @@ export function LiveSportsPage({ onPlay, initialTab = 'tv' }: LiveSportsPageProp
                   key={idx}
                   type="button"
                   onClick={() => void inspectWrestlingEvent(ev)}
-                  className={`${cardSurface} p-4 text-left space-y-2 hover:border-white/35 transition-colors cursor-pointer`}
+                  className={`${t.card} p-4 text-left space-y-2 cursor-pointer`}
                 >
-                  <p className="font-display text-base font-semibold text-white line-clamp-2">
+                  <p className="text-base font-semibold line-clamp-2">
                     {String(ev.title || ev.name || 'Wrestling Event')}
                   </p>
-                  <p className="text-xs text-zinc-400">
+                  <p className={`text-xs ${t.muted}`}>
                     {[ev.date, ev.promotion || wrestlingCatalog].filter(Boolean).map(String).join(' · ')}
                   </p>
                 </button>

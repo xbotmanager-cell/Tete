@@ -78,12 +78,12 @@ const PG_SCHEMA_SQL = `
     preferred_quality TEXT NOT NULL DEFAULT '1080',
     preferred_subtitle_lang TEXT NOT NULL DEFAULT 'en',
     preferred_audio_lang TEXT NOT NULL DEFAULT 'en',
-    preferred_layout TEXT NOT NULL DEFAULT 'classic',
+    preferred_layout TEXT NOT NULL DEFAULT 'cinematic',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 
   ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS preferred_layout TEXT NOT NULL DEFAULT 'classic';
+    ADD COLUMN IF NOT EXISTS preferred_layout TEXT NOT NULL DEFAULT 'cinematic';
 
   CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
@@ -163,7 +163,7 @@ const SQLITE_SCHEMA_SQL = `
     preferred_quality TEXT NOT NULL DEFAULT '1080',
     preferred_subtitle_lang TEXT NOT NULL DEFAULT 'en',
     preferred_audio_lang TEXT NOT NULL DEFAULT 'en',
-    preferred_layout TEXT NOT NULL DEFAULT 'classic',
+    preferred_layout TEXT NOT NULL DEFAULT 'cinematic',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -252,7 +252,7 @@ function normalizeUser(row: Record<string, unknown>): DbUser {
     preferred_quality: String(row.preferred_quality ?? '1080'),
     preferred_subtitle_lang: String(row.preferred_subtitle_lang ?? 'en'),
     preferred_audio_lang: String(row.preferred_audio_lang ?? 'en'),
-    preferred_layout: String(row.preferred_layout ?? 'classic'),
+    preferred_layout: String(row.preferred_layout ?? 'cinematic'),
     created_at: toIso(row.created_at),
   };
 }
@@ -362,7 +362,7 @@ async function getSqliteDb(): Promise<import('node:sqlite').DatabaseSync> {
     sqlite.exec(SQLITE_SCHEMA_SQL);
     const cols = sqlite.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
     if (!cols.some((c) => c.name === 'preferred_layout')) {
-      sqlite.exec("ALTER TABLE users ADD COLUMN preferred_layout TEXT NOT NULL DEFAULT 'classic'");
+      sqlite.exec("ALTER TABLE users ADD COLUMN preferred_layout TEXT NOT NULL DEFAULT 'cinematic'");
     }
     globalForDb.__lupinSqliteDb = sqlite;
   }

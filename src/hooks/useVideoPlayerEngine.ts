@@ -316,11 +316,12 @@ export function useVideoPlayerEngine(
     void fetchAndLoadPlayback(false);
 
     return () => {
+      persistCurrentProgress(true);
       clearRefreshTimer();
       clearAutoNextTimer();
       destroyHls();
     };
-  }, [target, fetchAndLoadPlayback, clearRefreshTimer, clearAutoNextTimer, destroyHls]);
+  }, [target, fetchAndLoadPlayback, persistCurrentProgress, clearRefreshTimer, clearAutoNextTimer, destroyHls]);
 
   useEffect(() => {
     const vid = videoRef.current;

@@ -12,6 +12,15 @@ import { SidebarVideoPlayer } from './editions/sidebar/SidebarVideoPlayer';
 import { CinematicEdition } from './editions/cinematic/CinematicEdition';
 import { CinematicDetailModal } from './editions/cinematic/CinematicDetailModal';
 import { CinematicVideoPlayer } from './editions/cinematic/CinematicVideoPlayer';
+import { EditorialEdition } from './editions/editorial/EditorialEdition';
+import { EditorialDetailModal } from './editions/editorial/EditorialDetailModal';
+import { EditorialVideoPlayer } from './editions/editorial/EditorialVideoPlayer';
+import { NeonEdition } from './editions/neon/NeonEdition';
+import { NeonDetailModal } from './editions/neon/NeonDetailModal';
+import { NeonVideoPlayer } from './editions/neon/NeonVideoPlayer';
+import { MinimalistEdition } from './editions/minimalist/MinimalistEdition';
+import { MinimalistDetailModal } from './editions/minimalist/MinimalistDetailModal';
+import { MinimalistVideoPlayer } from './editions/minimalist/MinimalistVideoPlayer';
 import type {
   EditionSection,
   LibrarySectionTab,
@@ -124,6 +133,54 @@ function LupinShell() {
             onSelectRelated={(item) => setSelectedTitle(item)}
           />
           <CinematicVideoPlayer
+            target={playbackTarget}
+            onClose={() => setPlaybackTarget(null)}
+          />
+        </>
+      )}
+
+      {layoutMode === 'editorial' && (
+        <>
+          <EditorialEdition {...sharedProps} />
+          <EditorialDetailModal
+            item={selectedTitle}
+            onClose={() => setSelectedTitle(null)}
+            onPlay={handlePlayFromDetail}
+            onSelectRelated={(item) => setSelectedTitle(item)}
+          />
+          <EditorialVideoPlayer
+            target={playbackTarget}
+            onClose={() => setPlaybackTarget(null)}
+          />
+        </>
+      )}
+
+      {layoutMode === 'neon' && (
+        <>
+          <NeonEdition {...sharedProps} />
+          <NeonDetailModal
+            item={selectedTitle}
+            onClose={() => setSelectedTitle(null)}
+            onPlay={handlePlayFromDetail}
+            onSelectRelated={(item) => setSelectedTitle(item)}
+          />
+          <NeonVideoPlayer
+            target={playbackTarget}
+            onClose={() => setPlaybackTarget(null)}
+          />
+        </>
+      )}
+
+      {layoutMode === 'minimalist' && (
+        <>
+          <MinimalistEdition {...sharedProps} />
+          <MinimalistDetailModal
+            item={selectedTitle}
+            onClose={() => setSelectedTitle(null)}
+            onPlay={handlePlayFromDetail}
+            onSelectRelated={(item) => setSelectedTitle(item)}
+          />
+          <MinimalistVideoPlayer
             target={playbackTarget}
             onClose={() => setPlaybackTarget(null)}
           />

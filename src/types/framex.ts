@@ -1,5 +1,5 @@
 export type ProviderSource = 'moviebox' | 'showbox' | string;
-export type LayoutMode = 'classic' | 'sidebar' | 'cinematic';
+export type LayoutMode = 'cinematic' | 'classic' | 'sidebar' | 'editorial' | 'neon' | 'minimalist';
 
 export interface MediaItem {
   id: string;

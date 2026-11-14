@@ -66,6 +66,9 @@ export function SidebarCommandSearch({
     { label: 'Navigate to TV Series', hint: 'Route', action: () => onNavigateSection('series') },
     { label: 'Open Anime Studio', hint: 'Route', action: () => onNavigateSection('anime') },
     { label: 'Open Live TV & Sports', hint: 'Route', action: () => onNavigateSection('live') },
+    { label: 'Open Support Center', hint: 'Support', action: () => onNavigateSection('support') },
+    { label: 'About Lupin Starnley', hint: 'Creator', action: () => onNavigateSection('about') },
+    { label: 'Contact Us', hint: 'Contact', action: () => onNavigateSection('contact') },
     { label: 'Switch Website Edition', hint: 'Appearance', action: onOpenAppearance },
   ];
 

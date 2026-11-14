@@ -1,0 +1,129 @@
+name: Android Build (APK & AAB)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/android-build.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/android-build.yml'
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'Production Vercel API base URL (overrides vars.API_BASE_URL)'
+        required: false
+        type: string
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Analyze, Test & Build Android
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Ensure Gradle wrapper binaries are present
+        run: |
+          if [ ! -f android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
+            flutter create --platforms=android --org com.lupinmovies --project-name lupin_movies /tmp/flutter_android_tpl
+            cp /tmp/flutter_android_tpl/android/gradlew android/
+            cp /tmp/flutter_android_tpl/android/gradlew.bat android/
+            mkdir -p android/gradle/wrapper
+            cp /tmp/flutter_android_tpl/android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/
+            chmod +x android/gradlew
+            rm -rf /tmp/flutter_android_tpl
+          fi
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Run Dart static analyzer
+        run: flutter analyze
+
+      - name: Run Flutter unit and widget tests
+        run: flutter test
+
+      - name: Configure Android release keystore (if secrets are provided)
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_STORE_PASSWORD" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+            cat <<EOF > android/key.properties
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Release keystore configured."
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Android release keystore secrets not configured; falling back to debug signing key for CI verification (not suitable for Google Play Store upload)."
+          fi
+
+      - name: Resolve API_BASE_URL
+        id: config
+        env:
+          INPUT_URL: ${{ github.event.inputs.api_base_url }}
+          VAR_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          API_URL="${INPUT_URL:-$VAR_URL}"
+          if [ -z "$API_URL" ]; then
+            API_URL="https://ais-pre-n3i22csvzas34xba3x2pvl-986205634764.europe-west2.run.app"
+            echo "::notice::Using default API_BASE_URL ($API_URL). Set repository variable API_BASE_URL to target your custom Vercel domain."
+          fi
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Build Android Release APK
+        run: flutter build apk --release --dart-define=API_BASE_URL="${{ steps.config.outputs.api_url }}"
+
+      - name: Build Android App Bundle (AAB)
+        run: flutter build appbundle --release --dart-define=API_BASE_URL="${{ steps.config.outputs.api_url }}"
+
+      - name: Clean up temporary keystore files
+        if: always()
+        run: rm -f android/app/upload-keystore.jks android/key.properties
+
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lupin-movies-android-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Upload Android AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lupin-movies-android-aab
+          path: mobile/build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30

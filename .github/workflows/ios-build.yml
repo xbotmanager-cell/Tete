@@ -1,0 +1,169 @@
+name: iOS Build (Xcode & IPA)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/ios-build.yml'
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'Production Vercel API base URL (overrides vars.API_BASE_URL)'
+        required: false
+        type: string
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    name: Analyze, Test & Build iOS
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Run Dart static analyzer
+        run: flutter analyze
+
+      - name: Run Flutter unit and widget tests
+        run: flutter test
+
+      - name: Install CocoaPods dependencies
+        working-directory: mobile/ios
+        run: pod install --repo-update
+
+      - name: Resolve API_BASE_URL
+        id: config
+        env:
+          INPUT_URL: ${{ github.event.inputs.api_base_url }}
+          VAR_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          API_URL="${INPUT_URL:-$VAR_URL}"
+          if [ -z "$API_URL" ]; then
+            API_URL="https://ais-pre-n3i22csvzas34xba3x2pvl-986205634764.europe-west2.run.app"
+            echo "::notice::Using default API_BASE_URL ($API_URL). Set repository variable API_BASE_URL to target your custom Vercel domain."
+          fi
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Check Apple Developer signing secrets
+        id: signing_check
+        env:
+          IOS_CERT: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
+          IOS_P12_PASS: ${{ secrets.IOS_P12_PASSWORD }}
+          IOS_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          if [ -n "$IOS_CERT" ] && [ -n "$IOS_P12_PASS" ] && [ -n "$IOS_PROFILE" ] && [ -n "$IOS_TEAM_ID" ]; then
+            echo "can_sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_sign=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple Developer signing secrets (IOS_BUILD_CERTIFICATE_BASE64, IOS_P12_PASSWORD, IOS_PROVISION_PROFILE_BASE64, IOS_TEAM_ID) are not set. Running --no-codesign verification build instead of signed IPA export."
+          fi
+
+      - name: Import Apple distribution certificate and provisioning profile
+        if: steps.signing_check.outputs.can_sign == 'true'
+        env:
+          IOS_BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
+          IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          IOS_EXPORT_METHOD: ${{ vars.IOS_EXPORT_METHOD }}
+        run: |
+          KEYCHAIN_PASS="${IOS_KEYCHAIN_PASSWORD:-ci-temp-keychain-pass}"
+          CERT_PATH="$RUNNER_TEMP/build_certificate.p12"
+          PROFILE_PATH="$RUNNER_TEMP/build_profile.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo "$IOS_BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          echo "$IOS_PROVISION_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$IOS_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< $(security cms -D -i "$PROFILE_PATH"))
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :Name' /dev/stdin <<< $(security cms -D -i "$PROFILE_PATH"))
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision"
+
+          EXPORT_METHOD="${IOS_EXPORT_METHOD:-app-store-connect}"
+          cat <<EOF > ios/ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>${EXPORT_METHOD}</string>
+            <key>teamID</key>
+            <string>${IOS_TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.lupinmovies.app</key>
+              <string>${PROFILE_NAME}</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Build Signed iOS IPA
+        if: steps.signing_check.outputs.can_sign == 'true'
+        run: |
+          flutter build ipa --release \
+            --export-options-plist=ios/ExportOptions.plist \
+            --dart-define=API_BASE_URL="${{ steps.config.outputs.api_url }}"
+
+      - name: Upload Signed iOS IPA artifact
+        if: steps.signing_check.outputs.can_sign == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lupin-movies-ios-ipa
+          path: mobile/build/ios/ipa/*.ipa
+          retention-days: 30
+
+      - name: Build Unsigned iOS Runner.app (verification fallback)
+        if: steps.signing_check.outputs.can_sign != 'true'
+        run: |
+          flutter build ios --release --no-codesign --dart-define=API_BASE_URL="${{ steps.config.outputs.api_url }}"
+          mkdir -p build/ios/unsigned
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/ios/unsigned/Runner-unsigned.app.zip
+
+      - name: Upload Unsigned iOS Runner.app archive
+        if: steps.signing_check.outputs.can_sign != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lupin-movies-ios-unsigned-runner
+          path: mobile/build/ios/unsigned/Runner-unsigned.app.zip
+          retention-days: 14
+
+      - name: Clean up temporary Apple signing keychain and secrets
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/build_certificate.p12" "$RUNNER_TEMP/build_profile.mobileprovision" ios/ExportOptions.plist
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
