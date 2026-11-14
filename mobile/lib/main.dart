@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'config/app_config.dart';
 import 'providers/auth_provider.dart';
 import 'providers/catalog_provider.dart';
+import 'providers/download_provider.dart';
+import 'providers/update_provider.dart';
 import 'screens/shell_screen.dart';
 import 'theme/edition_themes.dart';
 
@@ -24,12 +27,16 @@ class LupinMoviesApp extends StatefulWidget {
 class _LupinMoviesAppState extends State<LupinMoviesApp> {
   late final AuthProvider _authProvider;
   late final CatalogProvider _catalogProvider;
+  late final DownloadProvider _downloadProvider;
+  late final UpdateProvider _updateProvider;
 
   @override
   void initState() {
     super.initState();
     _authProvider = AuthProvider();
     _catalogProvider = CatalogProvider(_authProvider.apiClient);
+    _downloadProvider = DownloadProvider(_authProvider.apiClient);
+    _updateProvider = UpdateProvider(_authProvider.apiClient);
     if (!widget.skipInit) {
       _bootstrap();
     }
@@ -38,6 +45,15 @@ class _LupinMoviesAppState extends State<LupinMoviesApp> {
   Future<void> _bootstrap() async {
     await _authProvider.initialize();
     _catalogProvider.loadAll();
+    unawaited(_downloadProvider.initialize());
+    unawaited(_updateProvider.initialize());
+  }
+
+  @override
+  void dispose() {
+    _downloadProvider.dispose();
+    _updateProvider.dispose();
+    super.dispose();
   }
 
   @override
@@ -46,6 +62,8 @@ class _LupinMoviesAppState extends State<LupinMoviesApp> {
       providers: [
         ChangeNotifierProvider.value(value: _authProvider),
         ChangeNotifierProvider.value(value: _catalogProvider),
+        ChangeNotifierProvider.value(value: _downloadProvider),
+        ChangeNotifierProvider.value(value: _updateProvider),
       ],
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {

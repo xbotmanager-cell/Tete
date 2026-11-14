@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/framex_models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/update_provider.dart';
 import '../screens/about_creator_screen.dart';
 import '../screens/anime_screen.dart';
 import '../screens/contact_screen.dart';
 import '../screens/discover_screen.dart';
+import '../screens/downloads_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/library_screen.dart';
 import '../screens/live_sports_screen.dart';
@@ -15,6 +17,7 @@ import '../screens/support_center_screen.dart';
 import '../theme/edition_themes.dart';
 import '../widgets/appearance_sheet.dart';
 import '../widgets/auth_sheet.dart';
+import '../widgets/update_dialog.dart';
 
 class LupinShellScreen extends StatefulWidget {
   const LupinShellScreen({super.key});
@@ -26,6 +29,7 @@ class LupinShellScreen extends StatefulWidget {
 class _LupinShellScreenState extends State<LupinShellScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   AppSection _section = AppSection.home;
+  bool _mandatoryDialogShown = false;
 
   void _navigateTo(AppSection target) {
     setState(() => _section = target);
@@ -45,6 +49,8 @@ class _LupinShellScreenState extends State<LupinShellScreen> {
         return const NovelsScreen();
       case AppSection.library:
         return const LibraryScreen();
+      case AppSection.downloads:
+        return const DownloadsScreen();
       case AppSection.support:
         return SupportCenterScreen(onNavigateSection: _navigateTo);
       case AppSection.about:
@@ -64,6 +70,7 @@ class _LupinShellScreenState extends State<LupinShellScreen> {
       AppSection.liveSports => 'Live TV & Sports',
       AppSection.novels => 'Novel Library',
       AppSection.library => 'My Library',
+      AppSection.downloads => 'Downloads',
       AppSection.support => 'Support Center',
       AppSection.about => 'About Creator',
       AppSection.contact => 'Contact Us',
@@ -288,6 +295,7 @@ class _LupinShellScreenState extends State<LupinShellScreen> {
       (AppSection.liveSports, 'Live TV, Sports & Wrestling', Icons.live_tv_outlined),
       (AppSection.novels, 'Novel Library', Icons.menu_book_outlined),
       (AppSection.library, 'My Library', Icons.bookmark_outline),
+      (AppSection.downloads, 'Downloads', Icons.download_for_offline_outlined),
       (AppSection.support, 'Support Center', Icons.support_agent_outlined),
       (AppSection.about, 'About Lupin Starnley', Icons.person_outline),
       (AppSection.contact, 'Contact Us', Icons.mail_outline),
@@ -366,14 +374,29 @@ class _LupinShellScreenState extends State<LupinShellScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final upd = context.watch<UpdateProvider>();
     final t = getEditionVisualTheme(auth.layoutMode);
+
+    if (upd.shouldPresentPrompt && upd.mandatory && !_mandatoryDialogShown) {
+      _mandatoryDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          showLupinUpdateDialog(context);
+        }
+      });
+    }
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: t.background,
       appBar: _buildEditionAppBar(t, auth),
       drawer: _buildDrawer(t, auth),
-      body: _buildBody(),
+      body: Column(
+        children: [
+          const LupinUpdateBanner(),
+          Expanded(child: _buildBody()),
+        ],
+      ),
       bottomNavigationBar: auth.layoutMode == LayoutMode.sidebar
           ? null // Sidebar edition uses its workspace drawer navigation cleanly
           : NavigationBar(

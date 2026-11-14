@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../models/framex_models.dart';
+import '../models/update_models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/update_provider.dart';
 import '../theme/edition_themes.dart';
 import '../widgets/appearance_sheet.dart';
 import '../widgets/auth_sheet.dart';
+import '../widgets/update_dialog.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   final ValueChanged<AppSection> onNavigateSection;
@@ -18,18 +20,12 @@ class ProfileSettingsScreen extends StatefulWidget {
 
 class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final _apiUrlCtrl = TextEditingController();
-  String _versionLabel = '1.0.0';
   bool _savingPrefs = false;
 
   @override
   void initState() {
     super.initState();
     _apiUrlCtrl.text = context.read<AuthProvider>().apiBaseUrl;
-    PackageInfo.fromPlatform().then((info) {
-      if (mounted) {
-        setState(() => _versionLabel = '${info.version} (${info.buildNumber})');
-      }
-    }).catchError((_) {});
   }
 
   @override
@@ -41,8 +37,10 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final upd = context.watch<UpdateProvider>();
     final t = getEditionVisualTheme(auth.layoutMode);
     final user = auth.user;
+    final versionLabel = '${upd.installedVersion} (${upd.installedVersionCode})';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -204,10 +202,90 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: t.surface,
+            borderRadius: BorderRadius.circular(t.cardRadius),
+            border: Border.all(color: t.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('App Updates',
+                      style: t.headingFont(TextStyle(fontSize: 20, color: t.text))),
+                  Text(
+                    'v$versionLabel',
+                    style: TextStyle(color: t.mutedText, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                switch (upd.stage) {
+                  UpdateStage.checking => 'Checking for new release…',
+                  UpdateStage.available ||
+                  UpdateStage.playStorePrompt =>
+                    'Update available: v${upd.manifest?.latestVersion ?? upd.playInfo?.availableVersionCode ?? ''}',
+                  UpdateStage.downloading =>
+                    'Downloading update (${(upd.downloadProgress * 100).round()}%)…',
+                  UpdateStage.verifying => 'Verifying APK signature & SHA-256…',
+                  UpdateStage.upToDate => 'You are on the latest version.',
+                  UpdateStage.error => upd.errorMessage ?? 'Update check failed.',
+                  _ => upd.isPlayStoreBuild
+                      ? 'Managed via Google Play In-App Updates & LUPIN MOVIES manifest.'
+                      : 'Automatic verification checks over HTTPS with SHA-256 & signature validation.',
+                },
+                style: TextStyle(
+                  color: upd.stage == UpdateStage.error ? const Color(0xFFEF4444) : t.mutedText,
+                  fontSize: 12.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: upd.stage == UpdateStage.checking
+                        ? null
+                        : () => upd.checkForUpdates(manual: true),
+                    icon: const Icon(Icons.refresh, size: 17),
+                    label: const Text('Check for Updates'),
+                  ),
+                  if (upd.stage == UpdateStage.available ||
+                      upd.stage == UpdateStage.playStorePrompt ||
+                      upd.stage == UpdateStage.awaitingPermission ||
+                      upd.stage == UpdateStage.readyToInstall)
+                    ElevatedButton.icon(
+                      onPressed: () => showLupinUpdateDialog(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: t.accent,
+                        foregroundColor: t.onAccent,
+                      ),
+                      icon: const Icon(Icons.system_update_rounded, size: 17),
+                      label: const Text('View Update'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         Card(
           color: t.surface,
           child: Column(
             children: [
+              ListTile(
+                leading: Icon(Icons.download_for_offline_outlined, color: t.accent),
+                title: Text('Offline Downloads', style: TextStyle(color: t.text)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => widget.onNavigateSection(AppSection.downloads),
+              ),
+              Divider(height: 1, color: t.border),
               ListTile(
                 leading: Icon(Icons.support_agent, color: t.accent),
                 title: Text('Support Center', style: TextStyle(color: t.text)),
@@ -234,7 +312,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         const SizedBox(height: 16),
         Center(
           child: Text(
-            'LUPIN MOVIES v$_versionLabel',
+            'LUPIN MOVIES v$versionLabel',
             style: TextStyle(color: t.mutedText, fontSize: 12),
           ),
         ),

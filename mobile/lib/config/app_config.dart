@@ -8,8 +8,17 @@ class AppConfig {
     defaultValue: 'https://ais-pre-n3i22csvzas34xba3x2pvl-986205634764.europe-west2.run.app',
   );
 
+  /// Optional override URL for direct-APK / CI release update manifest JSON.
+  /// When empty, defaults to "<apiBaseUrl>/api/local/app-update".
+  static const String defaultUpdateManifestUrl = String.fromEnvironment(
+    'UPDATE_MANIFEST_URL',
+    defaultValue: '',
+  );
+
   static const String appName = 'LUPIN MOVIES';
   static const String bundleId = 'com.lupinmovies.app';
+  static const String defaultVersionName = '1.0.0';
+  static const int defaultVersionCode = 1;
 
   // Official Creator & Support Channels
   static const String creatorName = 'Lupin Starnley';

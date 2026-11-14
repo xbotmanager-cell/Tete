@@ -2,9 +2,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/app_config.dart';
+import '../models/download_models.dart';
 import '../models/framex_models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/download_provider.dart';
 import '../screens/video_player_screen.dart';
+import '../services/stream_resolver.dart';
 import '../theme/edition_themes.dart';
 import '../widgets/api_error_banner.dart';
 import '../widgets/edition_media_card.dart';
@@ -74,6 +77,164 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
   }
 
   String? _actionNotice;
+  bool _resolvingDownload = false;
+  String? _resolvedSubjectId;
+
+  Future<String> _resolveEffectiveSubjectId(MediaItem item) async {
+    if (_resolvedSubjectId != null) return _resolvedSubjectId!;
+    final contentId = item.subjectId ?? item.id;
+    if (item.source == 'showbox' || RegExp(r'^\d+$').hasMatch(contentId)) {
+      _resolvedSubjectId = contentId;
+      return contentId;
+    }
+    try {
+      final auth = context.read<AuthProvider>();
+      final lookup = await auth.apiClient.get(
+        '/api/fx/ids/lookup',
+        query: {'detailPath': item.detailPath ?? item.slug},
+      );
+      if (lookup is Map && (lookup['subjectId'] != null || lookup['id'] != null)) {
+        _resolvedSubjectId = (lookup['subjectId'] ?? lookup['id']).toString();
+        return _resolvedSubjectId!;
+      }
+    } catch (_) {}
+    _resolvedSubjectId = contentId;
+    return contentId;
+  }
+
+  Future<void> _handleDownload({
+    int season = 0,
+    int episode = 0,
+    String? episodeTitle,
+  }) async {
+    final d = _detail;
+    if (d == null || _resolvingDownload) return;
+    final auth = context.read<AuthProvider>();
+    final dl = context.read<DownloadProvider>();
+    final t = getEditionVisualTheme(auth.layoutMode);
+    final item = d.item;
+
+    setState(() {
+      _resolvingDownload = true;
+      _actionNotice = null;
+    });
+
+    try {
+      final resolvedId = await _resolveEffectiveSubjectId(item);
+      final existing = dl.findByContent(
+        provider: item.source,
+        contentId: resolvedId,
+        season: season,
+        episode: episode,
+      );
+
+      if (existing != null && existing.status == DownloadStatus.completed && existing.localFilePath != null) {
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => VideoPlayerScreen(
+              initialTarget: ActivePlaybackTarget(
+                mode: PlayerMode.direct,
+                title: existing.title,
+                subtitle: existing.subtitle ?? 'Offline Playback',
+                poster: existing.posterUrl,
+                provider: existing.provider,
+                contentId: existing.contentId,
+                slug: existing.slug,
+                mediaType: existing.mediaType,
+                season: existing.season > 0 ? existing.season : null,
+                episode: existing.episode > 0 ? existing.episode : null,
+                localFilePath: existing.localFilePath,
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (existing != null && existing.status.isActive) {
+        if (mounted) {
+          setState(() => _actionNotice =
+              '${item.title} is already downloading (${existing.progressPercent}%). Check Downloads in the menu.');
+        }
+        return;
+      }
+
+      final options = await dl.fetchDownloadOptions(
+        item: item,
+        resolvedContentId: resolvedId,
+        season: season,
+        episode: episode,
+        preferredQuality: auth.user?.preferredQuality ?? '1080',
+      );
+
+      if (!mounted) return;
+      if (options.isEmpty) {
+        setState(() => _actionNotice =
+            'No direct downloadable video file is available from this provider. Use Watch Now to stream instead.');
+        return;
+      }
+
+      DownloadQualityOption? chosen;
+      if (options.length == 1) {
+        chosen = options.first;
+      } else {
+        chosen = await showModalBottomSheet<DownloadQualityOption>(
+          context: context,
+          backgroundColor: t.surface,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Text(
+                    'Select Download Quality',
+                    style: t.headingFont(TextStyle(fontSize: 20, color: t.text)),
+                  ),
+                ),
+                ...options.map(
+                  (opt) => ListTile(
+                    leading: Icon(Icons.high_quality_outlined, color: t.accent),
+                    title: Text(
+                      '${opt.quality} (${(opt.format ?? 'mp4').toUpperCase()})',
+                      style: TextStyle(color: t.text, fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: opt.sizeBytes != null
+                        ? Text(formatBytes(opt.sizeBytes!),
+                            style: TextStyle(color: t.mutedText, fontSize: 12))
+                        : null,
+                    trailing: Icon(Icons.download_rounded, color: t.accent),
+                    onTap: () => Navigator.of(ctx).pop(opt),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      if (chosen == null || !mounted) return;
+      final result = await dl.startDownload(
+        item: item,
+        resolvedContentId: resolvedId,
+        option: chosen,
+        season: season,
+        episode: episode,
+        episodeTitle: episodeTitle,
+      );
+
+      if (mounted) {
+        setState(() => _actionNotice = result.message);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _actionNotice = 'Download check failed: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _resolvingDownload = false);
+    }
+  }
 
   Future<void> _launchPlay({int? season, int? episode}) async {
     final d = _detail;
@@ -107,26 +268,21 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
             if (episode != null) 'episode': episode,
           },
         );
-        String? firstUrl;
-        if (sources is Map) {
-          firstUrl = sources['url']?.toString();
-          if ((firstUrl == null || firstUrl.isEmpty) && sources['sources'] is List) {
-            final srcList = sources['sources'] as List;
-            if (srcList.isNotEmpty && srcList.first is Map) {
-              firstUrl = (srcList.first as Map)['url']?.toString();
-            }
-          }
-        }
-        if (firstUrl == null || firstUrl.isEmpty) {
+        final candidates = StreamResolver.extractCandidates(
+          sources,
+          apiBaseUrl: auth.apiClient.baseUrl,
+        );
+        if (candidates.isEmpty) {
           if (mounted) {
             setState(() => _actionNotice =
                 'This Showbox discovery title does not currently have a playable proxy stream source.');
           }
           return;
         }
+        final first = candidates.first;
         final isSeries = item.type == 'series' || d.seasons.isNotEmpty;
         final target = ActivePlaybackTarget(
-          mode: firstUrl.contains('.m3u8') ? PlayerMode.hls : PlayerMode.direct,
+          mode: first.mode,
           title: item.title,
           subtitle: season != null && episode != null ? 'S$season · E$episode' : item.year,
           poster: item.poster,
@@ -137,7 +293,8 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           season: season,
           episode: episode,
           episodes: playerEpisodes,
-          initialUrl: firstUrl,
+          initialUrl: first.url,
+          httpHeaders: first.headers,
         );
         if (!mounted) return;
         await Navigator.of(context).push(
@@ -153,18 +310,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
     }
 
     // Resolve MovieBox numeric subjectId if needed
-    String resolvedSubjectId = contentId;
-    if (!RegExp(r'^\d+$').hasMatch(resolvedSubjectId)) {
-      try {
-        final lookup = await auth.apiClient.get(
-          '/api/fx/ids/lookup',
-          query: {'detailPath': item.detailPath ?? item.slug},
-        );
-        if (lookup is Map && (lookup['subjectId'] != null || lookup['id'] != null)) {
-          resolvedSubjectId = (lookup['subjectId'] ?? lookup['id']).toString();
-        }
-      } catch (_) {}
-    }
+    final resolvedSubjectId = await _resolveEffectiveSubjectId(item);
 
     ActivePlaybackTarget buildTargetForEpisode(PlayerEpisodeOption ep) {
       final seNum = ep.season ?? season ?? _selectedSeason;
@@ -353,7 +499,28 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
+                    IconButton.outlined(
+                      tooltip: 'Download for Offline Playback',
+                      onPressed: _resolvingDownload
+                          ? null
+                          : () {
+                              final firstEp = seasonGroup?.episodes.firstOrNull;
+                              _handleDownload(
+                                season: firstEp?.season ??
+                                    ((_detail?.seasons.isNotEmpty ?? false) ? _selectedSeason : 0),
+                                episode: firstEp?.episode ?? 0,
+                                episodeTitle: firstEp?.title,
+                              );
+                            },
+                      icon: _resolvingDownload
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: t.accent),
+                            )
+                          : Icon(Icons.download_rounded, color: t.accent),
+                    ),
                     IconButton.outlined(
                       tooltip: inWatchlist ? 'In Watchlist' : 'Add to Watchlist',
                       onPressed: () => auth.toggleLibraryItem(LibraryEntry(
@@ -509,7 +676,21 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                                 ),
                             ],
                           ),
-                          trailing: Icon(Icons.play_arrow_rounded, color: t.accent),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Download Episode',
+                                icon: Icon(Icons.download_outlined, color: t.mutedText, size: 20),
+                                onPressed: () => _handleDownload(
+                                  season: ep.season,
+                                  episode: ep.episode,
+                                  episodeTitle: ep.title,
+                                ),
+                              ),
+                              Icon(Icons.play_arrow_rounded, color: t.accent),
+                            ],
+                          ),
                         ),
                       );
                     }),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../models/framex_models.dart';
 import '../providers/auth_provider.dart';
+import '../services/local_stream_proxy.dart';
+import '../services/stream_resolver.dart';
 import '../services/subtitle_parser.dart';
 import '../theme/edition_themes.dart';
 
@@ -49,6 +52,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Timer? _hudTimer;
   Timer? _autoNextTimer;
   double _lastSavedPos = 0;
+  int _recoveryAttempts = 0;
 
   @override
   void initState() {
@@ -128,6 +132,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     if (!preservePosition) {
       _autoNextTimer?.cancel();
       _refreshTimer?.cancel();
+      _recoveryAttempts = 0;
       setState(() {
         _target = target;
         _loading = true;
@@ -141,7 +146,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
 
     try {
+      // 0. Offline file playback from Download Manager
+      if (target.localFilePath != null && target.localFilePath!.isNotEmpty) {
+        final localFile = File(target.localFilePath!);
+        if (!await localFile.exists()) {
+          throw Exception('Offline file was removed from device storage.');
+        }
+        await _initLocalFilePlayer(localFile, preserveDuration: preservePosition ? prevPosition : null);
+        return;
+      }
+
       if (target.provider == 'moviebox') {
+        final candidates = <StreamCandidate>[];
         final res = await auth.apiClient.get(
           '/api/fx/stream-url',
           query: {
@@ -152,17 +168,40 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             if (target.episode != null && target.episode! > 0) 'ep': target.episode,
           },
         );
-        final url = (res is Map) ? res['url']?.toString() : null;
-        final expiresIn =
-            (res is Map && res['expiresIn'] is num) ? (res['expiresIn'] as num).toInt() : 600;
-        if (url == null || url.isEmpty) {
-          throw Exception('FRAMEX did not return a playable signed stream URL.');
+        candidates.addAll(
+          StreamResolver.extractCandidates(
+            res,
+            apiBaseUrl: auth.apiClient.baseUrl,
+          ),
+        );
+
+        // Also gather alternative mirrors from /api/fx/play-links
+        try {
+          final pl = await auth.apiClient.get(
+            '/api/fx/play-links',
+            query: {
+              'subjectId': target.contentId,
+              if (target.detailPath != null) 'detailPath': target.detailPath,
+              if (target.season != null && target.season! > 0) 'se': target.season,
+              if (target.episode != null && target.episode! > 0) 'ep': target.episode,
+            },
+          );
+          candidates.addAll(
+            StreamResolver.extractCandidates(
+              pl,
+              apiBaseUrl: auth.apiClient.baseUrl,
+            ),
+          );
+        } catch (_) {}
+
+        if (candidates.isEmpty) {
+          throw Exception('FRAMEX did not return any playable stream URLs.');
         }
 
-        _scheduleProactiveRefresh(expiresIn);
-        await _initNativePlayer(
-          url,
-          mode: url.contains('.m3u8') ? PlayerMode.hls : PlayerMode.direct,
+        final ttl = candidates.first.expiresIn ?? 600;
+        _scheduleProactiveRefresh(ttl);
+        await _initWithCandidateFallback(
+          candidates,
           preserveDuration: preservePosition ? prevPosition : null,
         );
 
@@ -177,14 +216,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             'type': target.animeType ?? 'hard_sub',
           },
         );
-        final pageUrl = (res is Map)
-            ? (res['proxyUrl'] ?? res['embedUrl'] ?? res['url'])?.toString()
-            : null;
-        if (pageUrl == null || pageUrl.isEmpty) {
-          throw Exception('Gotaku did not return an embed player URL.');
+        final candidates = StreamResolver.extractCandidates(
+          res,
+          apiBaseUrl: auth.apiClient.baseUrl,
+        );
+        if (candidates.isEmpty) {
+          throw Exception('Gotaku did not return a playable player URL.');
         }
-        _initEmbedPlayer(pageUrl);
+        await _initWithCandidateFallback(
+          candidates,
+          preserveDuration: preservePosition ? prevPosition : null,
+          forceEmbedIfUnknown: true,
+        );
       } else if (target.provider == 'animex') {
+        final candidates = <StreamCandidate>[];
         try {
           final res = await auth.apiClient.get(
             '/api/fx/anime/animex/stream',
@@ -196,16 +241,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 'providerId': target.animeProviderId,
             },
           );
-          final hlsUrl = (res is Map) ? (res['proxyUrl'] ?? res['url'])?.toString() : null;
-          if (hlsUrl == null || hlsUrl.isEmpty) {
-            throw Exception('No direct AnimeX HLS URL');
-          }
-          await _initNativePlayer(
-            hlsUrl,
-            mode: PlayerMode.hls,
-            preserveDuration: preservePosition ? prevPosition : null,
+          candidates.addAll(
+            StreamResolver.extractCandidates(
+              res,
+              apiBaseUrl: auth.apiClient.baseUrl,
+            ),
           );
-        } catch (_) {
+        } catch (_) {}
+
+        // Also prepare AnimeX embed fallback cleanly
+        try {
           final emb = await auth.apiClient.get(
             '/api/fx/anime/animex/embed',
             query: {
@@ -216,33 +261,196 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 'providerId': target.animeProviderId,
             },
           );
-          final pageUrl = (emb is Map) ? (emb['embedUrl'] ?? emb['url'])?.toString() : null;
-          if (pageUrl == null || pageUrl.isEmpty) {
-            throw Exception('AnimeX stream and embed fallback are both unavailable.');
+          for (final c in StreamResolver.extractCandidates(emb, apiBaseUrl: auth.apiClient.baseUrl)) {
+            candidates.add(c.copyWith(mode: PlayerMode.embed, isEmbed: true));
           }
-          _initEmbedPlayer(pageUrl);
+        } catch (_) {}
+
+        if (candidates.isEmpty) {
+          throw Exception('AnimeX stream and embed fallback are both unavailable.');
         }
+
+        final ttl = candidates.first.expiresIn;
+        if (ttl != null && ttl > 0) _scheduleProactiveRefresh(ttl);
+
+        await _initWithCandidateFallback(
+          candidates,
+          preserveDuration: preservePosition ? prevPosition : null,
+        );
       } else if (target.initialUrl != null && target.initialUrl!.isNotEmpty) {
-        if (target.mode == PlayerMode.embed) {
-          _initEmbedPlayer(target.initialUrl!);
-        } else {
-          await _initNativePlayer(
-            target.initialUrl!,
-            mode: target.mode,
-            preserveDuration: preservePosition ? prevPosition : null,
-          );
-        }
+        final initialCandidate = StreamCandidate(
+          url: target.initialUrl!,
+          headers: StreamResolver.extractHeaders(const {}, baseHeaders: target.httpHeaders),
+          mode: target.mode,
+          isEmbed: target.mode == PlayerMode.embed,
+        );
+        await _initWithCandidateFallback(
+          [initialCandidate],
+          preserveDuration: preservePosition ? prevPosition : null,
+        );
       } else {
         throw Exception('Unsupported playback target configuration.');
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = _formatReadableError(e);
           _loading = false;
         });
       }
     }
+  }
+
+  String _formatReadableError(Object err) {
+    final msg = err.toString().replaceFirst('Exception: ', '').trim();
+    if (msg.contains('Source error') || msg.contains('ExoPlaybackException')) {
+      return 'Unable to decode this stream source directly on Android. Tap Reload Stream to retry an alternate server or source.';
+    }
+    return msg;
+  }
+
+  Future<void> _initWithCandidateFallback(
+    List<StreamCandidate> candidates, {
+    Duration? preserveDuration,
+    bool forceEmbedIfUnknown = false,
+  }) async {
+    Object? lastError;
+
+    for (final candidate in candidates) {
+      if (!mounted) return;
+      if (candidate.mode == PlayerMode.embed || candidate.isEmbed) {
+        _initEmbedPlayer(candidate.url, headers: candidate.headers);
+        return;
+      }
+
+      final probed = await StreamResolver.probeCandidate(candidate);
+      if (!mounted) return;
+
+      if (probed.mode == PlayerMode.embed || forceEmbedIfUnknown && probed.contentType?.contains('html') == true) {
+        _initEmbedPlayer(probed.finalUrl, headers: probed.headers);
+        return;
+      }
+
+      // Skip HTTP 4xx/5xx dead endpoints so we immediately try the next mirror
+      if (probed.statusCode != null && probed.statusCode! >= 400) {
+        lastError = Exception('Upstream stream returned HTTP ${probed.statusCode}');
+        continue;
+      }
+
+      // 1. Direct ExoPlayer playback with resolved URL, headers, and explicit HLS/direct formatHint
+      try {
+        await _initNativeNetworkPlayer(
+          probed.finalUrl,
+          mode: probed.mode,
+          httpHeaders: probed.headers,
+          preserveDuration: preserveDuration,
+        );
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+
+      // 2. Fallback via local 127.0.0.1 loopback proxy (rewrites HLS segment URIs + forwards custom headers/redirects)
+      try {
+        final proxiedUrl = await LocalStreamProxy.instance.registerStream(
+          probed.finalUrl,
+          headers: probed.headers,
+        );
+        await _initNativeNetworkPlayer(
+          proxiedUrl,
+          mode: probed.mode,
+          httpHeaders: const {},
+          preserveDuration: preserveDuration,
+        );
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    throw lastError ?? Exception('No playable stream source succeeded.');
+  }
+
+  Future<void> _initLocalFilePlayer(
+    File file, {
+    Duration? preserveDuration,
+  }) async {
+    _disposeVideo();
+    final controller = VideoPlayerController.file(
+      file,
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+    );
+    await _finalizeNativeController(
+      controller,
+      mode: PlayerMode.direct,
+      preserveDuration: preserveDuration,
+    );
+  }
+
+  Future<void> _initNativeNetworkPlayer(
+    String url, {
+    required PlayerMode mode,
+    required Map<String, String> httpHeaders,
+    Duration? preserveDuration,
+  }) async {
+    _disposeVideo();
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(url),
+      formatHint: mode == PlayerMode.hls ? VideoFormat.hls : VideoFormat.other,
+      httpHeaders: httpHeaders,
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+    );
+    await _finalizeNativeController(
+      controller,
+      mode: mode,
+      preserveDuration: preserveDuration,
+    );
+  }
+
+  Future<void> _finalizeNativeController(
+    VideoPlayerController controller, {
+    required PlayerMode mode,
+    Duration? preserveDuration,
+  }) async {
+    _videoController = controller;
+    controller.addListener(_onVideoTick);
+
+    await controller.initialize();
+    if (!mounted || _videoController != controller) return;
+
+    final auth = context.read<AuthProvider>();
+    Duration? seekTarget = preserveDuration;
+    if (seekTarget == null && _target.mediaType != 'live') {
+      final saved = auth.getWatchProgress(
+        _target.contentId,
+        season: _target.season ?? 0,
+        episode: _target.episode ?? 0,
+      );
+      if (saved != null &&
+          saved.positionSeconds > 8 &&
+          (saved.durationSeconds <= 0 || saved.positionSeconds < saved.durationSeconds - 15)) {
+        seekTarget = Duration(seconds: saved.positionSeconds.floor());
+        _resumedFrom = seekTarget;
+      }
+    }
+
+    if (seekTarget != null && seekTarget > Duration.zero) {
+      final totalDur = controller.value.duration;
+      if (totalDur == Duration.zero || seekTarget < totalDur - const Duration(seconds: 2)) {
+        await controller.seekTo(seekTarget);
+      }
+    }
+
+    await controller.setPlaybackSpeed(_speed);
+    await controller.play();
+
+    setState(() {
+      _effectiveMode = mode;
+      _embedUrl = null;
+      _loading = false;
+      _error = null;
+    });
+    _wakeHud();
   }
 
   void _scheduleProactiveRefresh(int expiresInSeconds) {
@@ -250,7 +458,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final ttl = expiresInSeconds > 0 ? expiresInSeconds : 600;
     final delaySec = (ttl - 90).clamp(30, 540);
     _refreshTimer = Timer(Duration(seconds: delaySec), () {
-      if (mounted && _effectiveMode != PlayerMode.embed) {
+      if (mounted && _effectiveMode != PlayerMode.embed && _target.localFilePath == null) {
         _loadTarget(_target, preservePosition: true);
       }
     });
@@ -300,12 +508,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-  void _initEmbedPlayer(String url) {
+  void _initEmbedPlayer(String url, {Map<String, String> headers = const {}}) {
     _disposeVideo();
+    final ua = headers['User-Agent'] ?? StreamResolver.defaultUserAgent;
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
-      ..loadRequest(Uri.parse(url));
+      ..setUserAgent(ua)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (req) {
+            final u = req.url.toLowerCase();
+            if (u.startsWith('http://') || u.startsWith('https://')) {
+              return NavigationDecision.navigate;
+            }
+            return NavigationDecision.prevent;
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(url), headers: headers);
 
     setState(() {
       _effectiveMode = PlayerMode.embed;
@@ -316,64 +537,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     });
   }
 
-  Future<void> _initNativePlayer(
-    String url, {
-    required PlayerMode mode,
-    Duration? preserveDuration,
-  }) async {
-    _disposeVideo();
-    final controller = VideoPlayerController.networkUrl(
-      Uri.parse(url),
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
-    );
-    _videoController = controller;
-    controller.addListener(_onVideoTick);
-
-    await controller.initialize();
-    if (!mounted || _videoController != controller) return;
-
-    final auth = context.read<AuthProvider>();
-    Duration? seekTarget = preserveDuration;
-    if (seekTarget == null && _target.mediaType != 'live') {
-      final saved = auth.getWatchProgress(
-        _target.contentId,
-        season: _target.season ?? 0,
-        episode: _target.episode ?? 0,
-      );
-      if (saved != null &&
-          saved.positionSeconds > 8 &&
-          (saved.durationSeconds <= 0 || saved.positionSeconds < saved.durationSeconds - 15)) {
-        seekTarget = Duration(seconds: saved.positionSeconds.floor());
-        _resumedFrom = seekTarget;
-      }
-    }
-
-    if (seekTarget != null && seekTarget > Duration.zero) {
-      final totalDur = controller.value.duration;
-      if (totalDur == Duration.zero || seekTarget < totalDur - const Duration(seconds: 2)) {
-        await controller.seekTo(seekTarget);
-      }
-    }
-
-    await controller.setPlaybackSpeed(_speed);
-    await controller.play();
-
-    setState(() {
-      _effectiveMode = mode;
-      _embedUrl = null;
-      _loading = false;
-      _error = null;
-    });
-    _wakeHud();
-  }
-
   void _onVideoTick() {
     final vc = _videoController;
     if (vc == null || !mounted) return;
     final val = vc.value;
 
     if (val.hasError && _error == null) {
-      setState(() => _error = val.errorDescription ?? 'Stream playback error.');
+      // Automatic bounded recovery when signed URL expires or drops mid-stream
+      if (_recoveryAttempts < 2 &&
+          _target.localFilePath == null &&
+          (_target.provider == 'moviebox' || _target.provider == 'animex')) {
+        _recoveryAttempts += 1;
+        unawaited(_loadTarget(_target, preservePosition: true));
+        return;
+      }
+      setState(() => _error = _formatReadableError(val.errorDescription ?? 'Stream playback error.'));
       return;
     }
 
@@ -511,7 +689,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               Text('Playback Controls',
                   style: t.headingFont(TextStyle(fontSize: 20, color: t.text))),
               const SizedBox(height: 14),
-              if (_target.provider == 'moviebox') ...[
+              if (_target.provider == 'moviebox' && _target.localFilePath == null) ...[
                 Text('Resolution', style: TextStyle(color: t.mutedText, fontSize: 12)),
                 const SizedBox(height: 6),
                 Wrap(
@@ -532,7 +710,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 ),
                 const SizedBox(height: 14),
               ],
-              if (_target.availableLanguages.length > 1) ...[
+              if (_target.availableLanguages.length > 1 && _target.localFilePath == null) ...[
                 Text('Audio Language', style: TextStyle(color: t.mutedText, fontSize: 12)),
                 const SizedBox(height: 6),
                 Wrap(
@@ -705,7 +883,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       CircularProgressIndicator(color: t.accent),
                       const SizedBox(height: 12),
                       Text(
-                        _loading ? 'Loading stream (${_target.provider.toUpperCase()})…' : 'Buffering…',
+                        _loading
+                            ? (_target.localFilePath != null
+                                ? 'Opening offline download…'
+                                : 'Resolving stream (${_target.provider.toUpperCase()})…')
+                            : 'Buffering…',
                         style: const TextStyle(color: Colors.white70, fontSize: 13),
                       ),
                     ],
@@ -733,7 +915,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           spacing: 12,
                           children: [
                             ElevatedButton.icon(
-                              onPressed: () => _loadTarget(_target, preservePosition: true),
+                              onPressed: () {
+                                _recoveryAttempts = 0;
+                                _loadTarget(_target, preservePosition: true);
+                              },
                               style: ElevatedButton.styleFrom(backgroundColor: t.accent),
                               icon: const Icon(Icons.refresh, color: Colors.white),
                               label: const Text('Reload Stream',

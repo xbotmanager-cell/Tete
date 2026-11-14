@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/framex_models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/download_provider.dart';
 import '../screens/detail_screen.dart';
+import '../screens/downloads_screen.dart';
 import '../theme/edition_themes.dart';
 import '../widgets/auth_sheet.dart';
 import '../widgets/edition_media_card.dart';
@@ -26,6 +28,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final dl = context.watch<DownloadProvider>();
     final t = getEditionVisualTheme(auth.layoutMode);
 
     final continueList = auth.watchProgress.where((w) {
@@ -38,6 +41,41 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     final width = MediaQuery.of(context).size.width;
     final cols = width >= 900 ? 5 : width >= 600 ? 4 : 3;
+
+    if (_tab == 'downloads') {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final opt in [
+                    ('continue', 'Continue (${continueList.length})'),
+                    ('recent', 'Recently Watched (${auth.watchProgress.length})'),
+                    ('watchlist', 'Watchlist (${watchlist.length})'),
+                    ('favorite', 'Favorites (${favorites.length})'),
+                    ('reading', 'Reading (${auth.readingProgress.length})'),
+                    ('downloads', 'Downloads (${dl.records.length})'),
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(opt.$2, style: const TextStyle(fontSize: 12)),
+                        selected: _tab == opt.$1,
+                        selectedColor: t.accent,
+                        onSelected: (_) => setState(() => _tab = opt.$1),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const Expanded(child: DownloadsScreen()),
+        ],
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -79,6 +117,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ('watchlist', 'Watchlist (${watchlist.length})'),
                       ('favorite', 'Favorites (${favorites.length})'),
                       ('reading', 'Reading (${auth.readingProgress.length})'),
+                      ('downloads', 'Downloads (${dl.records.length})'),
                     ])
                       Padding(
                         padding: const EdgeInsets.only(right: 8),

@@ -98,3 +98,64 @@ flutter build appbundle --release --dart-define=API_BASE_URL=https://your-vercel
 # Build iOS IPA locally (macOS + Xcode required)
 flutter build ipa --release --dart-define=API_BASE_URL=https://your-vercel-domain.vercel.app
 ```
+
+---
+
+## 6. Automatic App Update & Release Publishing Workflow
+
+LUPIN MOVIES supports automatic startup, periodic (every 6 hours), and manual (**Profile & Settings → Check for Updates**) update checks using two delivery paths:
+
+1. **Google Play Store builds (`installer == com.android.vending`)** — Uses the official Android Play Core **In-App Updates** API (Flexible update UI for optional updates, Immediate full-screen update UI when marked critical in Google Play Console).
+2. **Direct APK / GitHub Release / Website builds** — Fetches the JSON manifest from `/api/local/app-update` (or an explicit `--dart-define=UPDATE_MANIFEST_URL=...`), downloads the signed APK over **HTTPS only**, validates the **SHA-256 checksum** AND verifies via Android `PackageManager` that `packageName == com.lupinmovies.app`, `versionCode >= installed`, and the **APK signing certificate matches** the installed build before triggering Android `FileProvider` installation (preserving user auth, library sync, and downloads).
+
+### Release Publishing Steps
+
+1. **Bump version in `mobile/pubspec.yaml`** (`versionName+versionCode`, e.g. `1.1.0+2`):
+   ```yaml
+   version: 1.1.0+2
+   ```
+2. **Build the signed release APK** using the **same upload/release keystore** (`ANDROID_KEYSTORE_BASE64`) used for previous releases:
+   ```bash
+   cd mobile
+   flutter build apk --release \
+     --dart-define=API_BASE_URL=https://your-vercel-domain.vercel.app
+   ```
+   *(Or tag a release `git tag v1.1.0 && git push --tags` so GitHub Actions builds and attaches the signed APK automatically.)*
+3. **Compute the APK byte size and SHA-256 checksum**:
+   ```bash
+   sha256sum build/app/outputs/flutter-apk/app-release.apk
+   wc -c build/app/outputs/flutter-apk/app-release.apk
+   ```
+4. **Host the APK over HTTPS** (e.g., GitHub Releases asset URL or HTTPS CDN).
+5. **Publish the update metadata** via either:
+   - **Option A — Vercel Environment Variables** (served directly by `/api/local/app-update`):
+     ```env
+     APP_LATEST_VERSION=1.1.0
+     APP_LATEST_VERSION_CODE=2
+     APP_APK_URL=https://github.com/lupinstarnley/lupin-movies/releases/download/v1.1.0/lupin-movies-v1.1.0.apk
+     APP_APK_SHA256=<64-hex-sha256>
+     APP_APK_FILE_SIZE=<bytes>
+     APP_UPDATE_RELEASE_NOTES=Improved Android ExoPlayer playback, offline Download Manager, and stability fixes.
+     APP_UPDATE_MANDATORY=false
+     APP_MIN_SUPPORTED_VERSION_CODE=1
+     ```
+   - **Option B — External HTTPS JSON Manifest** (`APP_UPDATE_MANIFEST_URL=https://.../app-update.json` or `--dart-define=UPDATE_MANIFEST_URL=...`):
+     ```json
+     {
+       "configured": true,
+       "latestVersion": "1.1.0",
+       "versionCode": 2,
+       "apkUrl": "https://github.com/lupinstarnley/lupin-movies/releases/download/v1.1.0/lupin-movies-v1.1.0.apk",
+       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+       "fileSize": 48231940,
+       "releaseNotes": "- Fixed ExoPlayer source errors across HLS and MP4 mirrors\n- Added background offline Download Manager\n- Performance improvements",
+       "mandatory": false,
+       "minSupportedVersionCode": 1,
+       "playStoreUrl": "https://play.google.com/store/apps/details?id=com.lupinmovies.app"
+     }
+     ```
+
+### Update Policy Behavior
+- **Optional Update** (`mandatory: false` and `installedVersionCode >= minSupportedVersionCode`): Users can choose **Update Now**, **Remind Later** (24-hour cooldown), or **Skip Version** (won't re-prompt until a newer `versionCode` is published).
+- **Mandatory Update** (`mandatory: true` or `installedVersionCode < minSupportedVersionCode`): Prompt is non-dismissible until updated.
+

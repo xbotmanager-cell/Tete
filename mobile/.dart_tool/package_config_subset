@@ -118,6 +118,10 @@ http_parser
 2.12
 file:///root/.pub-cache/hosted/pub.dev/http_parser-4.0.2/
 file:///root/.pub-cache/hosted/pub.dev/http_parser-4.0.2/lib/
+in_app_update
+2.17
+file:///root/.pub-cache/hosted/pub.dev/in_app_update-4.2.5/
+file:///root/.pub-cache/hosted/pub.dev/in_app_update-4.2.5/lib/
 js
 2.19
 file:///root/.pub-cache/hosted/pub.dev/js-0.6.7/

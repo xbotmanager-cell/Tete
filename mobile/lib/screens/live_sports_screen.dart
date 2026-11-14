@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/framex_models.dart';
 import '../providers/auth_provider.dart';
 import '../screens/video_player_screen.dart';
+import '../services/stream_resolver.dart';
 import '../theme/edition_themes.dart';
 import '../widgets/api_error_banner.dart';
 
@@ -111,30 +112,19 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
     final name = (ch['name'] ?? ch['title'] ?? 'Live Channel').toString();
     try {
       final res = await auth.apiClient.get('/api/fx/channels/${Uri.encodeComponent(id)}/stream');
-      if (res is Map) {
-        final hlsUrl = (res['hlsUrl'] ?? res['streamUrl'] ?? res['url'])?.toString();
-        final embedUrl = res['embedUrl']?.toString();
-        if (hlsUrl != null && hlsUrl.isNotEmpty && (embedUrl == null || embedUrl.isEmpty)) {
-          _openPlayer(ActivePlaybackTarget(
-            mode: PlayerMode.hls,
-            title: name,
-            subtitle: 'Live Television',
-            provider: 'channels',
-            contentId: id,
-            mediaType: 'live',
-            initialUrl: hlsUrl,
-          ));
-        } else if (embedUrl != null && embedUrl.isNotEmpty) {
-          _openPlayer(ActivePlaybackTarget(
-            mode: PlayerMode.embed,
-            title: name,
-            subtitle: 'Live Television (Embed)',
-            provider: 'channels',
-            contentId: id,
-            mediaType: 'live',
-            initialUrl: embedUrl,
-          ));
-        }
+      final candidates = StreamResolver.extractCandidates(res, apiBaseUrl: auth.apiClient.baseUrl);
+      if (candidates.isNotEmpty) {
+        final c = candidates.first;
+        _openPlayer(ActivePlaybackTarget(
+          mode: c.mode,
+          title: name,
+          subtitle: c.mode == PlayerMode.embed ? 'Live Television (Embed)' : 'Live Television',
+          provider: 'channels',
+          contentId: id,
+          mediaType: 'live',
+          initialUrl: c.url,
+          httpHeaders: c.headers,
+        ));
       }
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -150,33 +140,22 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
         '/api/fx/tvgarden/stream',
         query: {'country': _selectedCountry, 'channelId': id},
       );
-      if (res is Map) {
-        final payload = res['data'] is Map ? Map<String, dynamic>.from(res['data'] as Map) : res;
-        final proxyUrl = payload['proxyUrl']?.toString();
-        final embedUrl = payload['embedUrl']?.toString();
-        if (proxyUrl != null && proxyUrl.isNotEmpty) {
-          _openPlayer(ActivePlaybackTarget(
-            mode: PlayerMode.hls,
-            title: name,
-            subtitle: 'Live TV · ${_selectedCountry.toUpperCase()}',
-            provider: 'tvgarden',
-            contentId: id,
-            countryCode: _selectedCountry,
-            mediaType: 'live',
-            initialUrl: proxyUrl,
-          ));
-        } else if (embedUrl != null && embedUrl.isNotEmpty) {
-          _openPlayer(ActivePlaybackTarget(
-            mode: PlayerMode.embed,
-            title: name,
-            subtitle: 'Live TV · ${_selectedCountry.toUpperCase()} (YouTube)',
-            provider: 'tvgarden',
-            contentId: id,
-            countryCode: _selectedCountry,
-            mediaType: 'live',
-            initialUrl: embedUrl,
-          ));
-        }
+      final candidates = StreamResolver.extractCandidates(res, apiBaseUrl: auth.apiClient.baseUrl);
+      if (candidates.isNotEmpty) {
+        final c = candidates.first;
+        _openPlayer(ActivePlaybackTarget(
+          mode: c.mode,
+          title: name,
+          subtitle: c.mode == PlayerMode.embed
+              ? 'Live TV · ${_selectedCountry.toUpperCase()} (Embed)'
+              : 'Live TV · ${_selectedCountry.toUpperCase()}',
+          provider: 'tvgarden',
+          contentId: id,
+          countryCode: _selectedCountry,
+          mediaType: 'live',
+          initialUrl: c.url,
+          httpHeaders: c.headers,
+        ));
       }
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -280,19 +259,19 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
     if (partUrl.isEmpty) return;
     try {
       final res = await auth.apiClient.get('/api/fx/wrestling/stream', query: {'url': partUrl});
-      if (res is Map) {
-        final hlsUrl = (res['hlsUrl'] ?? res['proxyUrl'] ?? res['url'] ?? '').toString();
-        if (hlsUrl.isNotEmpty) {
-          _openPlayer(ActivePlaybackTarget(
-            mode: PlayerMode.hls,
-            title: title,
-            subtitle: (part['label'] ?? part['title'] ?? 'Event Stream').toString(),
-            provider: 'wrestling',
-            contentId: partUrl,
-            mediaType: 'wrestling',
-            initialUrl: hlsUrl,
-          ));
-        }
+      final candidates = StreamResolver.extractCandidates(res, apiBaseUrl: auth.apiClient.baseUrl);
+      if (candidates.isNotEmpty) {
+        final c = candidates.first;
+        _openPlayer(ActivePlaybackTarget(
+          mode: c.mode,
+          title: title,
+          subtitle: (part['label'] ?? part['title'] ?? 'Event Stream').toString(),
+          provider: 'wrestling',
+          contentId: partUrl,
+          mediaType: 'wrestling',
+          initialUrl: c.url,
+          httpHeaders: c.headers,
+        ));
       }
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -544,7 +523,11 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
                       'Away')
                   .toString();
               final score = '${m['homeScore'] ?? '-'} : ${m['awayScore'] ?? '-'}';
-              final proxyUrl = (m['proxyUrl'] ?? m['streamUrl'] ?? m['url'])?.toString();
+              final matchCandidates = StreamResolver.extractCandidates(
+                m,
+                apiBaseUrl: auth.apiClient.baseUrl,
+              );
+              final primaryMatchStream = matchCandidates.firstOrNull;
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(12),
@@ -595,17 +578,18 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
                             child: const Text('Stats & Events'),
                           ),
                         ),
-                        if (proxyUrl != null && proxyUrl.isNotEmpty) ...[
+                        if (primaryMatchStream != null) ...[
                           const SizedBox(width: 8),
                           ElevatedButton.icon(
                             onPressed: () => _openPlayer(ActivePlaybackTarget(
-                              mode: proxyUrl.contains('.m3u8') ? PlayerMode.hls : PlayerMode.direct,
+                              mode: primaryMatchStream.mode,
                               title: '$home vs $away',
                               subtitle: (m['leagueName'] ?? 'Match Stream').toString(),
                               provider: 'sports',
                               contentId: matchId,
                               mediaType: 'sports',
-                              initialUrl: proxyUrl,
+                              initialUrl: primaryMatchStream.url,
+                              httpHeaders: primaryMatchStream.headers,
                             )),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: t.accent,

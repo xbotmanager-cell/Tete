@@ -429,6 +429,81 @@ localRouter.post('/progress/reading', async (req, res) => {
   }
 });
 
+// Android Application Update Manifest Endpoint
+localRouter.get('/app-update', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  try {
+    const remoteManifestUrl = process.env.APP_UPDATE_MANIFEST_URL?.trim();
+    if (remoteManifestUrl && remoteManifestUrl.startsWith('https://')) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      try {
+        const upstream = await fetch(remoteManifestUrl, {
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        });
+        if (upstream.ok) {
+          const payload = (await upstream.json()) as Record<string, unknown>;
+          return res.json({
+            ok: true,
+            configured: true,
+            latestVersion: String(payload.latestVersion || '1.0.0'),
+            versionCode: Number(payload.versionCode || 1),
+            releaseNotes: String(payload.releaseNotes || ''),
+            apkUrl: String(payload.apkUrl || ''),
+            fileSize: Number(payload.fileSize || 0),
+            sha256: String(payload.sha256 || '').toLowerCase(),
+            mandatory: Boolean(payload.mandatory),
+            minSupportedVersionCode: Number(payload.minSupportedVersionCode || 1),
+            playStoreUrl:
+              typeof payload.playStoreUrl === 'string' && payload.playStoreUrl.trim()
+                ? payload.playStoreUrl.trim()
+                : 'https://play.google.com/store/apps/details?id=com.lupinmovies.app',
+            checkedAt: new Date().toISOString(),
+          });
+        }
+      } catch {
+        // Fall through to local environment manifest if remote manifest temporarily fails
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    const latestVersion = (process.env.APP_LATEST_VERSION || '1.0.0').trim();
+    const versionCode = Number.parseInt(process.env.APP_LATEST_VERSION_CODE || '1', 10) || 1;
+    const apkUrl = (process.env.APP_APK_URL || '').trim();
+    const fileSize = Number.parseInt(process.env.APP_APK_FILE_SIZE || '0', 10) || 0;
+    const sha256 = (process.env.APP_APK_SHA256 || '').trim().toLowerCase();
+    const releaseNotes = (process.env.APP_UPDATE_RELEASE_NOTES || '').trim();
+    const mandatory = ['1', 'true', 'yes'].includes(
+      (process.env.APP_UPDATE_MANDATORY || '').trim().toLowerCase()
+    );
+    const minSupportedVersionCode =
+      Number.parseInt(process.env.APP_MIN_SUPPORTED_VERSION_CODE || '1', 10) || 1;
+    const playStoreUrl = (
+      process.env.APP_PLAY_STORE_URL ||
+      'https://play.google.com/store/apps/details?id=com.lupinmovies.app'
+    ).trim();
+
+    return res.json({
+      ok: true,
+      configured: Boolean(apkUrl && sha256),
+      latestVersion,
+      versionCode,
+      releaseNotes,
+      apkUrl,
+      fileSize,
+      sha256,
+      mandatory,
+      minSupportedVersionCode,
+      playStoreUrl,
+      checkedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    return handleLocalError(res, err);
+  }
+});
+
 // Structured 404 for unknown /api/local/* endpoints
 localRouter.use((req, res) => {
   res.status(404).json({

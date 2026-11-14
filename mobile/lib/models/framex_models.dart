@@ -32,6 +32,7 @@ enum AppSection {
   liveSports,
   novels,
   library,
+  downloads,
   support,
   about,
   contact,
@@ -545,6 +546,8 @@ class ActivePlaybackTarget {
   final List<PlayerEpisodeOption> episodes;
   final List<String> availableLanguages;
   final String? initialUrl;
+  final Map<String, String> httpHeaders;
+  final String? localFilePath;
   final String? animeType; // sub, dub, hard_sub
   final String? animeProviderId;
   final String? countryCode;
@@ -565,6 +568,8 @@ class ActivePlaybackTarget {
     this.episodes = const [],
     this.availableLanguages = const [],
     this.initialUrl,
+    this.httpHeaders = const {},
+    this.localFilePath,
     this.animeType,
     this.animeProviderId,
     this.countryCode,
