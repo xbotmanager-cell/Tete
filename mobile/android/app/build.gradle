@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     id "com.android.application"
     id "kotlin-android"
@@ -34,7 +32,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.lupinmovies.app"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

@@ -281,7 +281,7 @@ class _LupinShellScreenState extends State<LupinShellScreen> {
   }
 
   Widget _buildDrawer(EditionVisualTheme t, AuthProvider auth) {
-    final entries = const [
+    const entries = [
       (AppSection.home, 'Home', Icons.home_outlined),
       (AppSection.discover, 'Movies & Series', Icons.movie_outlined),
       (AppSection.anime, 'Anime Center', Icons.auto_awesome_outlined),

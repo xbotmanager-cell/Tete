@@ -42,10 +42,19 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
   String? _selectedEventTitle;
   List<Map<String, dynamic>> _wrestlingParts = [];
 
+  late final TextEditingController _leagueController;
+
   @override
   void initState() {
     super.initState();
+    _leagueController = TextEditingController(text: _leagueId);
     _loadTv();
+  }
+
+  @override
+  void dispose() {
+    _leagueController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadTv() async {
@@ -501,9 +510,10 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
             Center(child: CircularProgressIndicator(color: t.accent))
           else if (_sportsSubTab == 'rankings') ...[
             TextField(
-              initialValue: _leagueId,
+              controller: _leagueController,
               style: TextStyle(color: t.text),
               decoration: const InputDecoration(labelText: 'League ID (e.g. 17)', border: OutlineInputBorder()),
+              onChanged: (v) => _leagueId = v.trim(),
               onSubmitted: (v) {
                 setState(() => _leagueId = v.trim());
                 _loadSports();

@@ -28,7 +28,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   WebViewController? _webViewController;
 
   PlayerMode _effectiveMode = PlayerMode.direct;
-  String? _streamUrl;
   String? _embedUrl;
   bool _loading = true;
   String? _error;
@@ -310,7 +309,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
     setState(() {
       _effectiveMode = PlayerMode.embed;
-      _streamUrl = null;
       _embedUrl = url;
       _webViewController = controller;
       _loading = false;
@@ -362,7 +360,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
     setState(() {
       _effectiveMode = mode;
-      _streamUrl = url;
       _embedUrl = null;
       _loading = false;
       _error = null;
